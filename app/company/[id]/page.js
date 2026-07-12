@@ -140,8 +140,7 @@ export default function CompanyProfile({ params }) {
               </button>
             )}
             <button
-              onClick={() => canMessage && router.push("/dashboard")}
-              disabled={!canMessage}
+  onClick={() => canMessage && router.push(`/dashboard?openMatch=${existingMatch.id}`)}              disabled={!canMessage}
               title={!canMessage ? "Connect first to start messaging" : ""}
               className={`flex-1 py-2.5 rounded-sm font-mono text-sm uppercase tracking-wide transition-colors ${
                 canMessage
