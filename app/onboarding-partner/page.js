@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 
 const BROKER_SERVICES = [
+  "Freight Brokerage",
   "Fuel Discounts",
   "Insurance",
   "Factoring",
@@ -16,9 +17,11 @@ const BROKER_SERVICES = [
 
 const VENDOR_SERVICES = [
   "Fuel Discounts",
+  "Insurance",
   "Factoring",
-  "Compliance/ELD",
   "Maintenance & Repair",
+  "Load Boards",
+  "Compliance/ELD",
   "Other",
 ];
 
