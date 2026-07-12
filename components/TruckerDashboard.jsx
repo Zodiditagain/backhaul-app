@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { MessageCircle, Handshake, Fuel, Building2, Package } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
@@ -8,6 +9,7 @@ import GradeBadge, { computeStats } from "./GradeBadge";
 import MatchThread from "./MatchThread";
 
 export default function TruckerDashboard({ user }) {
+  const searchParams = useSearchParams();
   const [profile, setProfile] = useState(null);
   const [details, setDetails] = useState(null);
   const [form, setForm] = useState({ lanes: "", bio: "" });
@@ -40,6 +42,12 @@ export default function TruckerDashboard({ user }) {
       .eq("trucker_id", user.id)
       .order("created_at", { ascending: false });
     setMatches(matchData || []);
+
+    const openMatchId = searchParams.get("openMatch");
+    if (openMatchId) {
+      const found = (matchData || []).find((m) => m.id === openMatchId);
+      if (found) setActiveMatch(found);
+    }
 
     const { data: reviewData } = await supabase
       .from("reviews")
