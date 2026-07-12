@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { MapPin, X, Handshake, MessageCircle } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import GradeBadge, { computeStats } from "./GradeBadge";
@@ -106,6 +107,12 @@ export default function MatchmakingDashboard({ user, role }) {
                 <div className="flex items-center gap-1.5 text-xs text-steelgray">
                   <MapPin size={12} /> {profile.trucker_details?.lanes}
                 </div>
+                <Link
+                  href={`/company/${profile.id}`}
+                  className="block text-center text-xs text-steelgray hover:text-amberx underline pt-1"
+                >
+                  View full profile
+                </Link>
               </div>
             </div>
 
@@ -147,14 +154,24 @@ export default function MatchmakingDashboard({ user, role }) {
         </div>
         <div className="space-y-2">
           {matches.map((m) => (
-            <button
+            <div
               key={m.id}
-              onClick={() => setActiveMatch(m)}
-              className={`w-full text-left bg-white border rounded-sm px-3 py-2.5 flex items-center justify-between ${activeMatch?.id === m.id ? "border-amberx" : "border-gray-300 hover:border-amberx/60"}`}
+              className={`w-full bg-white border rounded-sm px-3 py-2.5 flex items-center justify-between ${
+                activeMatch?.id === m.id ? "border-amberx" : "border-gray-300 hover:border-amberx/60"
+              }`}
             >
-              <span className="text-sm">{m.trucker?.company_name}</span>
-              <MessageCircle size={14} className="text-gray-400" />
-            </button>
+              <button onClick={() => setActiveMatch(m)} className="text-left flex-1">
+                <span className="text-sm">{m.trucker?.company_name}</span>
+              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <Link href={`/company/${m.trucker_id}`} className="text-[11px] text-steelgray hover:text-amberx underline whitespace-nowrap">
+                  Profile
+                </Link>
+                <button onClick={() => setActiveMatch(m)}>
+                  <MessageCircle size={14} className="text-gray-400" />
+                </button>
+              </div>
+            </div>
           ))}
           {matches.length === 0 && <p className="text-sm text-steelgray italic py-4">No matches yet — connect with a carrier to start.</p>}
         </div>
