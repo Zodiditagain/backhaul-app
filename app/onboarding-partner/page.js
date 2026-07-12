@@ -35,17 +35,20 @@ export default function OnboardingPartner() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    async function fetchRole() {
+    async function fetchProfile() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, services_offered, coverage_area, company_size")
         .eq("id", user.id)
         .single();
       setRole(profile?.role || null);
+      setServices(profile?.services_offered || []);
+      setCoverageArea(profile?.coverage_area || "");
+      setCompanySize(profile?.company_size || "1-10");
     }
-    fetchRole();
+    fetchProfile();
   }, []);
 
   const SERVICES = role === "vendor" ? VENDOR_SERVICES : BROKER_SERVICES;
@@ -149,7 +152,7 @@ export default function OnboardingPartner() {
             disabled={loading}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-md font-semibold text-sm transition disabled:opacity-50"
           >
-            {loading ? "Saving..." : "Save and Continue"}
+            {loading ? "Saving..." : "Save changes"}
           </button>
         </form>
       </div>
