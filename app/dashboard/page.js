@@ -1,18 +1,16 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Truck, LogOut } from "lucide-react";
+import Link from "next/link";
+import { Truck, LogOut, Settings } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import TruckerDashboard from "../../components/TruckerDashboard";
 import MatchmakingDashboard from "../../components/MatchmakingDashboard";
-
 export default function Dashboard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
-
   useEffect(() => {
     async function load() {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -22,13 +20,11 @@ export default function Dashboard() {
       }
       const currentUser = sessionData.session.user;
       setUser(currentUser);
-
       const { data: profileData, error } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", currentUser.id)
         .single();
-
       if (error) {
         console.error(error);
       } else {
@@ -38,15 +34,13 @@ export default function Dashboard() {
     }
     load();
   }, [router]);
-
   async function handleLogout() {
     await supabase.auth.signOut();
     router.replace("/login");
   }
-
   if (loading) return <div className="p-8 text-steelgray">Loading...</div>;
   if (!profile) return <div className="p-8 text-alertred">Couldn't load your profile. Try logging in again.</div>;
-
+  const isPartner = profile.role === "broker" || profile.role === "vendor";
   return (
     <div className="min-h-screen">
       <header className="bg-asphalt border-b-4 border-amberx">
@@ -60,15 +54,24 @@ export default function Dashboard() {
               <p className="text-gray-400 text-[11px] uppercase tracking-widest mt-0.5">{profile.company_name}</p>
             </div>
           </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
-          >
-            <LogOut size={14} /> Log out
-          </button>
+          <div className="flex items-center gap-5">
+            {isPartner && (
+              <Link
+                href="/onboarding-partner"
+                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
+              >
+                <Settings size={14} /> Edit Profile
+              </Link>
+            )}
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
+            >
+              <LogOut size={14} /> Log out
+            </button>
+          </div>
         </div>
       </header>
-
       <main className="max-w-4xl mx-auto px-5 py-6">
         {profile.role === "trucker" ? (
           <TruckerDashboard user={user} />
