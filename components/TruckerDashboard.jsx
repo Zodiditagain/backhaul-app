@@ -83,15 +83,21 @@ export default function TruckerDashboard({ user }) {
       <div>
         <h1 className="text-2xl font-bold text-asphalt">Good morning, {firstName} 👋</h1>
         <p className="text-steelgray text-sm mt-1">Here's what's happening in your network.</p>
+        <div
+          className="mt-4 h-px w-full"
+          style={{
+            backgroundImage: "repeating-linear-gradient(90deg, #F2A93B 0 16px, transparent 16px 28px)",
+          }}
+        />
       </div>
 
-      {/* Stat cards — real data only */}
+      {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <StatCard icon={<Building2 size={16} />} label="Broker Matches" value={brokerMatches.length} />
         <StatCard icon={<Package size={16} />} label="Vendor Matches" value={vendorMatches.length} />
-        <div className="col-span-2 sm:col-span-1">
-          <div className="bg-white border border-gray-300 rounded-sm p-4 h-full flex flex-col justify-between">
-            <span className="text-xs uppercase tracking-wide text-steelgray">Your Grade</span>
+        <div className="col-span-2 sm:col-span-1 bg-asphalt rounded-sm p-4 flex flex-col justify-between">
+          <span className="text-xs uppercase tracking-widest text-gray-400 font-mono">Your Grade</span>
+          <div className="mt-2">
             <GradeBadge grade={stats.grade} reviewCount={stats.reviewCount} />
           </div>
         </div>
@@ -100,7 +106,7 @@ export default function TruckerDashboard({ user }) {
       {/* Profile section */}
       <section>
         <div className="flex items-center justify-between border-b border-gray-300 pb-2">
-          <h2 className="text-xl font-bold">Your carrier profile</h2>
+          <h2 className="text-xl font-bold text-asphalt">Your carrier profile</h2>
         </div>
         <form onSubmit={saveDetails} className="mt-3 bg-white border border-gray-300 rounded-sm p-4 grid sm:grid-cols-2 gap-3">
           <div>
@@ -125,7 +131,10 @@ export default function TruckerDashboard({ user }) {
               rows={2}
             />
           </div>
-          <button type="submit" className="sm:col-span-2 bg-asphalt text-white py-2.5 rounded-sm font-mono text-sm uppercase tracking-wide">
+          <button
+            type="submit"
+            className="sm:col-span-2 bg-asphalt hover:bg-black text-white py-2.5 rounded-sm font-mono text-sm uppercase tracking-wide transition-colors"
+          >
             {details ? "Update profile" : "Save profile — get discovered"}
           </button>
         </form>
@@ -139,19 +148,29 @@ export default function TruckerDashboard({ user }) {
       {/* Connections + conversation */}
       <div className="grid md:grid-cols-2 gap-6">
         <section>
-          <h2 className="text-xl font-bold border-b border-gray-300 pb-2">Companies interested in you</h2>
+          <h2 className="text-xl font-bold text-asphalt border-b border-gray-300 pb-2">Companies interested in you</h2>
           <div className="space-y-2 mt-3">
             {matches.map((m) => (
               <button
                 key={m.id}
                 onClick={() => setActiveMatch(m)}
-                className={`w-full text-left bg-white border rounded-sm px-4 py-3 flex items-center justify-between ${activeMatch?.id === m.id ? "border-amberx" : "border-gray-300 hover:border-amberx/60"}`}
+                className={`w-full text-left bg-white border rounded-sm px-4 py-3 flex items-center justify-between transition-colors ${
+                  activeMatch?.id === m.id
+                    ? "border-amberx border-l-4"
+                    : "border-gray-300 border-l-4 border-l-transparent hover:border-l-amberx/60"
+                }`}
               >
                 <div className="flex items-center gap-3">
-                  {m.partner_role === "vendor" ? <Fuel size={16} className="text-steelgray" /> : <Handshake size={16} className="text-steelgray" />}
+                  <div className="w-8 h-8 rotate-45 bg-asphalt/5 border border-asphalt/10 flex items-center justify-center shrink-0">
+                    {m.partner_role === "vendor" ? (
+                      <Fuel size={14} className="-rotate-45 text-steelgray" />
+                    ) : (
+                      <Handshake size={14} className="-rotate-45 text-steelgray" />
+                    )}
+                  </div>
                   <div>
                     <div className="text-sm font-medium">{m.partner?.company_name}</div>
-                    <div className="text-xs text-gray-400 capitalize">{m.partner_role}</div>
+                    <div className="text-xs text-gray-400 font-mono uppercase tracking-wide">{m.partner_role}</div>
                   </div>
                 </div>
                 <MessageCircle size={15} className="text-gray-400" />
@@ -161,7 +180,7 @@ export default function TruckerDashboard({ user }) {
           </div>
         </section>
         <section>
-          <h2 className="text-xl font-bold border-b border-gray-300 pb-2">Conversation</h2>
+          <h2 className="text-xl font-bold text-asphalt border-b border-gray-300 pb-2">Conversation</h2>
           <div className="mt-3">
             {activeMatch ? (
               <MatchThread match={activeMatch} user={user} role="trucker" />
@@ -177,12 +196,14 @@ export default function TruckerDashboard({ user }) {
 
 function StatCard({ icon, label, value }) {
   return (
-    <div className="bg-white border border-gray-300 rounded-sm p-4 flex flex-col gap-2">
+    <div className="bg-asphalt rounded-sm p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <span className="text-xs uppercase tracking-wide text-steelgray">{label}</span>
-        <span className="text-steelgray">{icon}</span>
+        <span className="text-xs uppercase tracking-widest text-gray-400 font-mono">{label}</span>
+        <div className="w-6 h-6 rotate-45 bg-amberx flex items-center justify-center">
+          <span className="-rotate-45 text-asphalt">{icon}</span>
+        </div>
       </div>
-      <span className="text-2xl font-bold text-asphalt">{value}</span>
+      <span className="text-3xl font-bold text-white">{value}</span>
     </div>
   );
 }
