@@ -13,19 +13,32 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+ async function handleSubmit(e) {
+  e.preventDefault();
+  setError("");
+  setLoading(true);
+
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) {
+    setError(error.message);
     setLoading(false);
-    if (error) {
-      setError(error.message);
-      return;
-    }
-    router.push("/dashboard");
+    return;
   }
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, onboarding_completed")
+    .eq("id", data.user.id)
+    .single();
+
+  setLoading(false);
+
+  if (profile?.role === "trucker" && !profile.onboarding_completed) {
+    router.push("/onboarding");
+  } else {
+    router.push("/dashboard");
+  }
+}
   return (
     <div className="min-h-screen relative flex flex-col items-center px-6 py-10 text-center overflow-hidden">
       {/* Background photo */}
