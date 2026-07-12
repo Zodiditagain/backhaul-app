@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MessageCircle, Handshake, Fuel } from "lucide-react";
+import { MessageCircle, Handshake, Fuel, Building2, Package } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import GradeBadge, { computeStats } from "./GradeBadge";
 import MatchThread from "./MatchThread";
@@ -18,7 +18,7 @@ export default function TruckerDashboard({ user }) {
   async function loadEverything() {
     const { data: profileData } = await supabase
       .from("profiles")
-      .select("equipment_types, fleet_size, operator_type")
+      .select("equipment_types, fleet_size, operator_type, company_name")
       .eq("id", user.id)
       .single();
     setProfile(profileData);
@@ -71,15 +71,36 @@ export default function TruckerDashboard({ user }) {
   }
 
   const stats = computeStats(reviews);
+  const brokerMatches = matches.filter((m) => m.partner_role === "broker");
+  const vendorMatches = matches.filter((m) => m.partner_role === "vendor");
+  const firstName = (profile?.company_name || "there").split(" ")[0];
 
   if (loading) return <p className="text-steelgray">Loading your dashboard...</p>;
 
   return (
     <div className="space-y-8">
+      {/* Greeting */}
+      <div>
+        <h1 className="text-2xl font-bold text-asphalt">Good morning, {firstName} 👋</h1>
+        <p className="text-steelgray text-sm mt-1">Here's what's happening in your network.</p>
+      </div>
+
+      {/* Stat cards — real data only */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <StatCard icon={<Building2 size={16} />} label="Broker Matches" value={brokerMatches.length} />
+        <StatCard icon={<Package size={16} />} label="Vendor Matches" value={vendorMatches.length} />
+        <div className="col-span-2 sm:col-span-1">
+          <div className="bg-white border border-gray-300 rounded-sm p-4 h-full flex flex-col justify-between">
+            <span className="text-xs uppercase tracking-wide text-steelgray">Your Grade</span>
+            <GradeBadge grade={stats.grade} reviewCount={stats.reviewCount} />
+          </div>
+        </div>
+      </div>
+
+      {/* Profile section */}
       <section>
         <div className="flex items-center justify-between border-b border-gray-300 pb-2">
           <h2 className="text-xl font-bold">Your carrier profile</h2>
-          <GradeBadge grade={stats.grade} reviewCount={stats.reviewCount} />
         </div>
         <form onSubmit={saveDetails} className="mt-3 bg-white border border-gray-300 rounded-sm p-4 grid sm:grid-cols-2 gap-3">
           <div>
@@ -114,6 +135,8 @@ export default function TruckerDashboard({ user }) {
           </p>
         )}
       </section>
+
+      {/* Connections + conversation */}
       <div className="grid md:grid-cols-2 gap-6">
         <section>
           <h2 className="text-xl font-bold border-b border-gray-300 pb-2">Companies interested in you</h2>
@@ -148,6 +171,18 @@ export default function TruckerDashboard({ user }) {
           </div>
         </section>
       </div>
+    </div>
+  );
+}
+
+function StatCard({ icon, label, value }) {
+  return (
+    <div className="bg-white border border-gray-300 rounded-sm p-4 flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs uppercase tracking-wide text-steelgray">{label}</span>
+        <span className="text-steelgray">{icon}</span>
+      </div>
+      <span className="text-2xl font-bold text-asphalt">{value}</span>
     </div>
   );
 }
