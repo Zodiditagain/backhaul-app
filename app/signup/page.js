@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Truck } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 
 export default function Signup() {
@@ -42,26 +43,43 @@ export default function Signup() {
 
   if (done) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-6 text-center">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6 text-center">
         <div className="max-w-sm">
-          <h1 className="text-2xl font-bold mb-2">Check your email</h1>
-          <p className="text-steelgray text-sm">
+          <h1 className="text-2xl font-bold text-white mb-2">Check your email</h1>
+          <p className="text-gray-300 text-sm">
             We sent a confirmation link to <strong>{email}</strong>. Click it, then come back and log in.
           </p>
-          <Link href="/login" className="inline-block mt-4 text-highway underline text-sm">Go to login</Link>
+          <Link href="/login" className="inline-block mt-4 text-blue-400 underline text-sm">
+            Go to login
+          </Link>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6 py-10">
-      <form onSubmit={handleSubmit} className="w-full max-w-sm bg-white border border-gray-300 rounded-sm p-6">
-        <h1 className="text-2xl font-bold mb-4">Create an account</h1>
-        {error && <p className="text-alertred text-sm mb-3">{error}</p>}
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center px-6 py-10 text-center">
+      {/* Logo */}
+      <div className="flex items-center gap-3 mb-8">
+        <div className="w-10 h-10 rotate-45 bg-blue-600 flex items-center justify-center rounded-md">
+          <Truck className="-rotate-45" size={22} color="#ffffff" />
+        </div>
+        <div className="text-left">
+          <p className="text-white font-bold tracking-wide leading-tight">BACKHAUL</p>
+          <p className="text-blue-400 text-xs tracking-widest">NETWORK</p>
+        </div>
+      </div>
 
-        <label className="block text-xs uppercase tracking-wide text-steelgray mb-1">I am a...</label>
-        <div className="grid grid-cols-3 gap-2 mb-3">
+      <form onSubmit={handleSubmit} className="w-full max-w-sm text-left">
+        <h1 className="text-2xl font-bold text-white mb-1 text-center">Create an account</h1>
+        <p className="text-gray-300 text-sm mb-6 text-center">
+          Join the network connecting carriers, brokers, and vendors.
+        </p>
+
+        {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
+
+        <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">I am a...</label>
+        <div className="grid grid-cols-3 gap-2 mb-4">
           {[
             { id: "trucker", label: "Trucking Co." },
             { id: "broker", label: "Broker" },
@@ -71,42 +89,46 @@ export default function Signup() {
               type="button"
               key={r.id}
               onClick={() => setRole(r.id)}
-              className={`text-xs py-2 rounded-sm border ${role === r.id ? "bg-amberx border-amberx text-asphalt font-semibold" : "border-gray-300 text-steelgray"}`}
+              className={`text-xs py-2 rounded-sm border transition ${
+                role === r.id
+                  ? "bg-blue-600 border-blue-600 text-white font-semibold"
+                  : "border-slate-700 text-gray-300"
+              }`}
             >
               {r.label}
             </button>
           ))}
         </div>
 
-        <label className="block text-xs uppercase tracking-wide text-steelgray mb-1">Company name</label>
+        <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Company name</label>
         <input
           required
           value={companyName}
           onChange={(e) => setCompanyName(e.target.value)}
-          className="w-full border border-gray-300 rounded-sm px-3 py-2 mb-3 text-sm"
+          className="w-full bg-slate-900 border border-slate-700 rounded-sm px-3 py-2 mb-4 text-sm text-white focus:outline-none focus:border-blue-500"
         />
 
-        <label className="block text-xs uppercase tracking-wide text-steelgray mb-1">Email</label>
+        <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Email</label>
         <input
           type="email"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full border border-gray-300 rounded-sm px-3 py-2 mb-3 text-sm"
+          className="w-full bg-slate-900 border border-slate-700 rounded-sm px-3 py-2 mb-4 text-sm text-white focus:outline-none focus:border-blue-500"
         />
 
-        <label className="block text-xs uppercase tracking-wide text-steelgray mb-1">Password</label>
+        <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Password</label>
         <input
           type="password"
           required
           minLength={6}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full border border-gray-300 rounded-sm px-3 py-2 mb-4 text-sm"
+          className="w-full bg-slate-900 border border-slate-700 rounded-sm px-3 py-2 mb-4 text-sm text-white focus:outline-none focus:border-blue-500"
         />
 
         {role !== "trucker" && (
-          <p className="text-xs text-steelgray mb-3 italic">
+          <p className="text-xs text-gray-400 mb-3 italic">
             Broker/vendor accounts will need a subscription to unlock full access once billing is added.
           </p>
         )}
@@ -114,13 +136,14 @@ export default function Signup() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-asphalt text-white py-2.5 rounded-sm font-mono text-sm uppercase tracking-wide hover:bg-steelgray disabled:opacity-60"
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-md font-semibold text-sm transition disabled:opacity-50"
         >
           {loading ? "Creating account..." : "Sign up"}
         </button>
 
-        <p className="text-sm text-steelgray mt-4">
-          Already have an account? <Link href="/login" className="text-highway underline">Log in</Link>
+        <p className="text-sm text-gray-400 mt-4 text-center">
+          Already have an account?{" "}
+          <Link href="/login" className="text-blue-400 underline">Log in</Link>
         </p>
       </form>
     </div>
