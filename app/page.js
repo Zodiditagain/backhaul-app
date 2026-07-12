@@ -10,14 +10,27 @@ export default function Home() {
   const router = useRouter();
   const [checked, setChecked] = useState(false);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) router.replace("/dashboard");
-      else setChecked(true);
-    });
-  }, [router]);
+ useEffect(() => {
+  supabase.auth.getSession().then(async ({ data }) => {
+    if (data.session) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role, onboarding_completed")
+        .eq("id", data.session.user.id)
+        .single();
 
-  if (!checked) return null;
+      if (profile?.role === "trucker" && !profile.onboarding_completed) {
+        router.replace("/onboarding");
+      } else if ((profile?.role === "broker" || profile?.role === "vendor") && !profile.onboarding_completed) {
+        router.replace("/onboarding-partner");
+      } else {
+        router.replace("/dashboard");
+      }
+    } else {
+      setChecked(true);
+    }
+  });
+}, [router]);  if (!checked) return null;
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center px-6 py-10 text-center">
