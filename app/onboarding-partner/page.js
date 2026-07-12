@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 
-const SERVICES = [
-  "Freight Brokerage",
+const BROKER_SERVICES = [
   "Fuel Discounts",
   "Insurance",
   "Factoring",
@@ -15,13 +14,38 @@ const SERVICES = [
   "Other",
 ];
 
+const VENDOR_SERVICES = [
+  "Fuel Discounts",
+  "Factoring",
+  "Compliance/ELD",
+  "Maintenance & Repair",
+  "Other",
+];
+
 export default function OnboardingPartner() {
   const router = useRouter();
+  const [role, setRole] = useState(null);
   const [services, setServices] = useState([]);
   const [coverageArea, setCoverageArea] = useState("");
   const [companySize, setCompanySize] = useState("1-10");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function fetchRole() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+      setRole(profile?.role || null);
+    }
+    fetchRole();
+  }, []);
+
+  const SERVICES = role === "vendor" ? VENDOR_SERVICES : BROKER_SERVICES;
 
   function toggleService(s) {
     setServices((prev) =>
