@@ -7,14 +7,22 @@ import GradeBadge, { computeStats } from "./GradeBadge";
 import MatchThread from "./MatchThread";
 
 export default function TruckerDashboard({ user }) {
+  const [profile, setProfile] = useState(null);
   const [details, setDetails] = useState(null);
-  const [form, setForm] = useState({ fleet_size: "", equipment: "", lanes: "", bio: "", years_active: "" });
+  const [form, setForm] = useState({ lanes: "", bio: "" });
   const [matches, setMatches] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [activeMatch, setActiveMatch] = useState(null);
   const [loading, setLoading] = useState(true);
 
   async function loadEverything() {
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("equipment_types, fleet_size, operator_type")
+      .eq("id", user.id)
+      .single();
+    setProfile(profileData);
+
     const { data: detailsData } = await supabase
       .from("trucker_details")
       .select("*")
@@ -22,7 +30,7 @@ export default function TruckerDashboard({ user }) {
       .maybeSingle();
     if (detailsData) {
       setDetails(detailsData);
-      setForm(detailsData);
+      setForm({ lanes: detailsData.lanes || "", bio: detailsData.bio || "" });
     }
 
     const { data: matchData } = await supabase
@@ -50,11 +58,11 @@ export default function TruckerDashboard({ user }) {
     e.preventDefault();
     const payload = {
       id: user.id,
-      fleet_size: Number(form.fleet_size) || 0,
-      equipment: form.equipment,
+      fleet_size: profile?.fleet_size || "",
+      equipment: (profile?.equipment_types || []).join(", "),
       lanes: form.lanes,
       bio: form.bio,
-      years_active: Number(form.years_active) || 0,
+      years_active: details?.years_active || 0,
     };
     const { error } = details
       ? await supabase.from("trucker_details").update(payload).eq("id", user.id)
@@ -74,9 +82,18 @@ export default function TruckerDashboard({ user }) {
           <GradeBadge grade={stats.grade} reviewCount={stats.reviewCount} />
         </div>
         <form onSubmit={saveDetails} className="mt-3 bg-white border border-gray-300 rounded-sm p-4 grid sm:grid-cols-2 gap-3">
-          <Field label="Fleet size" value={form.fleet_size} onChange={(v) => setForm({ ...form, fleet_size: v })} placeholder="24" />
-          <Field label="Years active" value={form.years_active} onChange={(v) => setForm({ ...form, years_active: v })} placeholder="8" />
-          <Field label="Equipment (comma separated)" value={form.equipment} onChange={(v) => setForm({ ...form, equipment: v })} placeholder="Dry Van, Reefer" />
+          <div>
+            <label className="block text-xs uppercase tracking-wide text-steelgray mb-1">Fleet Size</label>
+            <div className="w-full border border-gray-300 rounded-sm px-3 py-2 text-sm bg-gray-50">
+              {profile?.fleet_size || "Not set"}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs uppercase tracking-wide text-steelgray mb-1">Equipment</label>
+            <div className="w-full border border-gray-300 rounded-sm px-3 py-2 text-sm bg-gray-50">
+              {(profile?.equipment_types || []).join(", ") || "Not set"}
+            </div>
+          </div>
           <Field label="Lanes you run" value={form.lanes} onChange={(v) => setForm({ ...form, lanes: v })} placeholder="CA, WA, OR" />
           <div className="sm:col-span-2">
             <label className="block text-xs uppercase tracking-wide text-steelgray mb-1">Bio</label>
@@ -87,7 +104,7 @@ export default function TruckerDashboard({ user }) {
               rows={2}
             />
           </div>
-          <button type="submit" className="sm:col-span-2 bg-asphalt text-white py-2.5 rounded-sm font-mono text-sm uppercase tracking-wide hover:bg-steelgray">
+          <button type="submit" className="sm:col-span-2 bg-asphalt text-white py-2.5 rounded-sm font-mono text-sm uppercase tracking-wide">
             {details ? "Update profile" : "Save profile — get discovered"}
           </button>
         </form>
@@ -97,7 +114,6 @@ export default function TruckerDashboard({ user }) {
           </p>
         )}
       </section>
-
       <div className="grid md:grid-cols-2 gap-6">
         <section>
           <h2 className="text-xl font-bold border-b border-gray-300 pb-2">Companies interested in you</h2>
