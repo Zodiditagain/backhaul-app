@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { MessageCircle, Handshake, Fuel, Building2, Package } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import GradeBadge, { computeStats } from "./GradeBadge";
@@ -151,16 +152,15 @@ export default function TruckerDashboard({ user }) {
           <h2 className="text-xl font-bold text-asphalt border-b border-gray-300 pb-2">Companies interested in you</h2>
           <div className="space-y-2 mt-3">
             {matches.map((m) => (
-              <button
+              <div
                 key={m.id}
-                onClick={() => setActiveMatch(m)}
-                className={`w-full text-left bg-white border rounded-sm px-4 py-3 flex items-center justify-between transition-colors ${
+                className={`w-full bg-white border rounded-sm px-4 py-3 flex items-center justify-between transition-colors ${
                   activeMatch?.id === m.id
                     ? "border-amberx border-l-4"
                     : "border-gray-300 border-l-4 border-l-transparent hover:border-l-amberx/60"
                 }`}
               >
-                <div className="flex items-center gap-3">
+                <button onClick={() => setActiveMatch(m)} className="flex items-center gap-3 text-left flex-1">
                   <div className="w-8 h-8 rotate-45 bg-asphalt/5 border border-asphalt/10 flex items-center justify-center shrink-0">
                     {m.partner_role === "vendor" ? (
                       <Fuel size={14} className="-rotate-45 text-steelgray" />
@@ -172,9 +172,16 @@ export default function TruckerDashboard({ user }) {
                     <div className="text-sm font-medium">{m.partner?.company_name}</div>
                     <div className="text-xs text-gray-400 font-mono uppercase tracking-wide">{m.partner_role}</div>
                   </div>
+                </button>
+                <div className="flex items-center gap-3 shrink-0">
+                  <Link href={`/company/${m.partner_id}`} className="text-xs text-steelgray hover:text-amberx underline whitespace-nowrap">
+                    View Profile
+                  </Link>
+                  <button onClick={() => setActiveMatch(m)}>
+                    <MessageCircle size={15} className="text-gray-400" />
+                  </button>
                 </div>
-                <MessageCircle size={15} className="text-gray-400" />
-              </button>
+              </div>
             ))}
             {matches.length === 0 && <p className="text-sm text-steelgray italic py-4">No matches yet.</p>}
           </div>
