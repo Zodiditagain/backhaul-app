@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Truck, Box, Zap, Package, Plus } from "lucide-react";
+import { Truck, Box, Zap, Package, Plus, Layers, Shield, Wind } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 
 const EQUIPMENT = [
@@ -13,6 +13,10 @@ const EQUIPMENT = [
   { id: "hotshot", label: "Hotshot", icon: Zap },
   { id: "power_only", label: "Power Only", icon: Truck },
   { id: "box_truck", label: "Box Truck", icon: Box },
+  { id: "manual_pallet_jack", label: "Manual Pallet Jack", icon: Layers },
+  { id: "straps", label: "Straps", icon: Shield },
+  { id: "tarps", label: "Tarps", icon: Wind },
+  { id: "freight_blankets", label: "Freight Blankets", icon: Layers },
   { id: "other", label: "Other", icon: Plus },
 ];
 
@@ -96,7 +100,7 @@ export default function Onboarding() {
                     </div>
                   )}
                   <Icon size={22} className={selected ? "text-blue-400" : "text-gray-400"} />
-                  <span className={`text-xs font-medium ${selected ? "text-white" : "text-gray-300"}`}>
+                  <span className={`text-xs font-medium text-center ${selected ? "text-white" : "text-gray-300"}`}>
                     {label}
                   </span>
                 </button>
