@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { MessageCircle, Handshake, Fuel, Building2, Package as PackageIcon } from "lucide-react";
+import { MessageCircle, Handshake, Fuel, Building2, Package as PackageIcon, Check, X as XIcon } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import GradeBadge, { computeStats } from "./GradeBadge";
 import MatchThread from "./MatchThread";
@@ -122,9 +122,20 @@ export default function TruckerDashboard({ user }) {
     if (!error) loadEverything();
   }
 
+  async function respondToMatch(matchId, decision) {
+    if (decision === "accepted") {
+      await supabase.from("matches").update({ status: "accepted" }).eq("id", matchId);
+    } else {
+      await supabase.from("matches").delete().eq("id", matchId);
+    }
+    loadEverything();
+  }
+
   const stats = computeStats(reviews);
-  const brokerMatches = matches.filter((m) => m.partner_role === "broker");
-  const vendorMatches = matches.filter((m) => m.partner_role === "vendor");
+  const acceptedMatches = matches.filter((m) => m.status === "accepted");
+  const pendingMatches = matches.filter((m) => m.status === "pending");
+  const brokerMatches = acceptedMatches.filter((m) => m.partner_role === "broker");
+  const vendorMatches = acceptedMatches.filter((m) => m.partner_role === "vendor");
   const firstName = (profile?.company_name || "there").split(" ")[0];
 
   if (loading) return <p className="text-steelgray">Loading your dashboard...</p>;
@@ -154,6 +165,48 @@ export default function TruckerDashboard({ user }) {
           </div>
         </div>
       </div>
+
+      {/* Pending requests */}
+      {pendingMatches.length > 0 && (
+        <section>
+          <h2 className="text-xl font-bold text-asphalt border-b border-gray-300 pb-2">Connection requests</h2>
+          <div className="space-y-2 mt-3">
+            {pendingMatches.map((m) => (
+              <div key={m.id} className="w-full bg-white border border-amberx/40 rounded-sm px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rotate-45 bg-asphalt/5 border border-asphalt/10 flex items-center justify-center shrink-0">
+                    {m.partner_role === "vendor" ? (
+                      <Fuel size={14} className="-rotate-45 text-steelgray" />
+                    ) : (
+                      <Handshake size={14} className="-rotate-45 text-steelgray" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium">{m.partner?.company_name}</div>
+                    <div className="text-xs text-gray-400 font-mono uppercase tracking-wide">{m.partner_role} wants to connect</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => respondToMatch(m.id, "accepted")}
+                    className="w-8 h-8 rounded-full bg-highway hover:bg-green-800 flex items-center justify-center text-white transition-colors"
+                    title="Accept"
+                  >
+                    <Check size={16} />
+                  </button>
+                  <button
+                    onClick={() => respondToMatch(m.id, "declined")}
+                    className="w-8 h-8 rounded-full border-2 border-gray-300 hover:border-alertred hover:text-alertred flex items-center justify-center text-steelgray transition-colors"
+                    title="Decline"
+                  >
+                    <XIcon size={16} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Profile section */}
       <section>
@@ -230,7 +283,7 @@ export default function TruckerDashboard({ user }) {
         <section>
           <h2 className="text-xl font-bold text-asphalt border-b border-gray-300 pb-2">Companies interested in you</h2>
           <div className="space-y-2 mt-3">
-            {matches.map((m) => (
+            {acceptedMatches.map((m) => (
               <div
                 key={m.id}
                 className={`w-full bg-white border rounded-sm px-4 py-3 flex items-center justify-between transition-colors ${
@@ -262,7 +315,7 @@ export default function TruckerDashboard({ user }) {
                 </div>
               </div>
             ))}
-            {matches.length === 0 && <p className="text-sm text-steelgray italic py-4">No matches yet.</p>}
+            {acceptedMatches.length === 0 && <p className="text-sm text-steelgray italic py-4">No matches yet.</p>}
           </div>
         </section>
         <section>
