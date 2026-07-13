@@ -172,11 +172,11 @@ export default function TruckerDashboard({ user }) {
                   type="button"
                   key={id}
                   onClick={() => toggleEquipment(id)}
-                  className={`text-xs py-2 px-2 rounded-sm border transition text-left ${
-                    selected
-                      ? "border-amberx bg-amberx/10 text-asphalt font-medium"
-                      : "border-gray-300 bg-gray-50 text-steelgray"
-                  }`}
+                 className={`text-xs py-2 px-2 rounded-sm border-2 transition text-left ${
+  selected
+    ? "border-amberx bg-amberx text-asphalt font-semibold shadow-sm"
+    : "border-gray-300 bg-gray-50 text-steelgray"
+}`}                
                 >
                   {label}
                 </button>
