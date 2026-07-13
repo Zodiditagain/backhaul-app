@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { MapPin, X, Handshake, MessageCircle, Truck } from "lucide-react";
+import { MapPin, X, Handshake, MessageCircle, Truck, Clock } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import GradeBadge, { computeStats } from "./GradeBadge";
 import MatchThread from "./MatchThread";
@@ -69,6 +69,7 @@ export default function MatchmakingDashboard({ user, role }) {
       trucker_id: profile.id,
       partner_id: user.id,
       partner_role: role,
+      status: "pending",
     });
     if (!error) {
       setJustMatched(profile);
@@ -80,7 +81,10 @@ export default function MatchmakingDashboard({ user, role }) {
     }
   }
 
-  const thisMonthCount = matches.filter((m) => {
+  const acceptedMatches = matches.filter((m) => m.status === "accepted");
+  const pendingMatches = matches.filter((m) => m.status === "pending");
+
+  const thisMonthCount = acceptedMatches.filter((m) => {
     const created = new Date(m.created_at);
     const now = new Date();
     return created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear();
@@ -163,12 +167,15 @@ export default function MatchmakingDashboard({ user, role }) {
                   <Handshake size={22} />
                 </button>
               </div>
+              <p className="text-xs text-gray-400 mt-2 text-center">
+                Sending a request — the carrier must accept before you can message.
+              </p>
 
               {justMatched && (
                 <div className="fixed inset-0 bg-asphalt/85 flex items-center justify-center z-20 px-4">
                   <div className="bg-white rounded-sm p-8 text-center max-w-sm">
-                    <h3 className="text-3xl font-bold mb-1">It's a match!</h3>
-                    <p className="text-sm text-steelgray">{justMatched.company_name} is now in your matches.</p>
+                    <h3 className="text-3xl font-bold mb-1">Request sent!</h3>
+                    <p className="text-sm text-steelgray">Waiting for {justMatched.company_name} to accept.</p>
                   </div>
                 </div>
               )}
@@ -189,8 +196,23 @@ export default function MatchmakingDashboard({ user, role }) {
               <Handshake size={14} className="-rotate-45 text-asphalt" />
             </div>
           </div>
+
+          {pendingMatches.length > 0 && (
+            <div className="mb-3">
+              <p className="text-xs uppercase tracking-wide text-gray-400 mb-1.5">Awaiting response</p>
+              <div className="space-y-1.5">
+                {pendingMatches.map((m) => (
+                  <div key={m.id} className="w-full bg-gray-50 border border-gray-200 rounded-sm px-3 py-2 flex items-center gap-2">
+                    <Clock size={13} className="text-gray-400 shrink-0" />
+                    <span className="text-sm text-gray-500">{m.trucker?.company_name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="space-y-2">
-            {matches.map((m) => (
+            {acceptedMatches.map((m) => (
               <div
                 key={m.id}
                 className={`w-full bg-white border rounded-sm px-3 py-2.5 flex items-center justify-between transition-colors ${
@@ -215,7 +237,9 @@ export default function MatchmakingDashboard({ user, role }) {
                 </div>
               </div>
             ))}
-            {matches.length === 0 && <p className="text-sm text-steelgray italic py-4">No matches yet — connect with a carrier to start.</p>}
+            {acceptedMatches.length === 0 && pendingMatches.length === 0 && (
+              <p className="text-sm text-steelgray italic py-4">No matches yet — connect with a carrier to start.</p>
+            )}
           </div>
           {activeMatch && (
             <div className="mt-4">
