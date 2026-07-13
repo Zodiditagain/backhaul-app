@@ -3,20 +3,36 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { MessageCircle, Handshake, Fuel, Building2, Package } from "lucide-react";
+import { MessageCircle, Handshake, Fuel, Building2, Package as PackageIcon } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import GradeBadge, { computeStats } from "./GradeBadge";
 import MatchThread from "./MatchThread";
+
+const EQUIPMENT_OPTIONS = [
+  { id: "dry_van", label: "Dry Van" },
+  { id: "reefer", label: "Reefer" },
+  { id: "flatbed", label: "Flatbed" },
+  { id: "step_deck", label: "Step Deck" },
+  { id: "hotshot", label: "Hotshot" },
+  { id: "power_only", label: "Power Only" },
+  { id: "box_truck", label: "Box Truck" },
+  { id: "manual_pallet_jack", label: "Manual Pallet Jack" },
+  { id: "straps", label: "Straps" },
+  { id: "tarps", label: "Tarps" },
+  { id: "freight_blankets", label: "Freight Blankets" },
+  { id: "other", label: "Other" },
+];
 
 export default function TruckerDashboard({ user }) {
   const searchParams = useSearchParams();
   const [profile, setProfile] = useState(null);
   const [details, setDetails] = useState(null);
-  const [form, setForm] = useState({ lanes: "", bio: "" });
+  const [form, setForm] = useState({ lanes: "", bio: "", fleetSize: "1-5", equipment: [] });
   const [matches, setMatches] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [activeMatch, setActiveMatch] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   async function loadEverything() {
     const { data: profileData } = await supabase
@@ -33,8 +49,14 @@ export default function TruckerDashboard({ user }) {
       .maybeSingle();
     if (detailsData) {
       setDetails(detailsData);
-      setForm({ lanes: detailsData.lanes || "", bio: detailsData.bio || "" });
     }
+
+    setForm({
+      lanes: detailsData?.lanes || "",
+      bio: detailsData?.bio || "",
+      fleetSize: profileData?.fleet_size || "1-5",
+      equipment: profileData?.equipment_types || [],
+    });
 
     const { data: matchData } = await supabase
       .from("matches")
@@ -63,12 +85,33 @@ export default function TruckerDashboard({ user }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function toggleEquipment(id) {
+    setForm((prev) => ({
+      ...prev,
+      equipment: prev.equipment.includes(id)
+        ? prev.equipment.filter((e) => e !== id)
+        : [...prev.equipment, id],
+    }));
+  }
+
   async function saveDetails(e) {
     e.preventDefault();
+    setSaving(true);
+
+    // Save fleet size + equipment to profiles
+    await supabase
+      .from("profiles")
+      .update({
+        fleet_size: form.fleetSize,
+        equipment_types: form.equipment,
+      })
+      .eq("id", user.id);
+
+    // Save lanes + bio to trucker_details
     const payload = {
       id: user.id,
-      fleet_size: profile?.fleet_size || "",
-      equipment: (profile?.equipment_types || []).join(", "),
+      fleet_size: form.fleetSize,
+      equipment: form.equipment.join(", "),
       lanes: form.lanes,
       bio: form.bio,
       years_active: details?.years_active || 0,
@@ -76,6 +119,8 @@ export default function TruckerDashboard({ user }) {
     const { error } = details
       ? await supabase.from("trucker_details").update(payload).eq("id", user.id)
       : await supabase.from("trucker_details").insert(payload);
+
+    setSaving(false);
     if (!error) loadEverything();
   }
 
@@ -103,7 +148,7 @@ export default function TruckerDashboard({ user }) {
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <StatCard icon={<Building2 size={16} />} label="Broker Matches" value={brokerMatches.length} />
-        <StatCard icon={<Package size={16} />} label="Vendor Matches" value={vendorMatches.length} />
+        <StatCard icon={<PackageIcon size={16} />} label="Vendor Matches" value={vendorMatches.length} />
         <div className="col-span-2 sm:col-span-1 bg-asphalt rounded-sm p-4 flex flex-col justify-between">
           <span className="text-xs uppercase tracking-widest text-gray-400 font-mono">Your Grade</span>
           <div className="mt-2">
@@ -117,21 +162,47 @@ export default function TruckerDashboard({ user }) {
         <div className="flex items-center justify-between border-b border-gray-300 pb-2">
           <h2 className="text-xl font-bold text-asphalt">Your carrier profile</h2>
         </div>
-        <form onSubmit={saveDetails} className="mt-3 bg-white border border-gray-300 rounded-sm p-4 grid sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs uppercase tracking-wide text-steelgray mb-1">Fleet Size</label>
-            <div className="w-full border border-gray-300 rounded-sm px-3 py-2 text-sm bg-gray-50">
-              {profile?.fleet_size || "Not set"}
-            </div>
+        <form onSubmit={saveDetails} className="mt-3 bg-white border border-gray-300 rounded-sm p-4">
+          <label className="block text-xs uppercase tracking-wide text-steelgray mb-2">Equipment</label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
+            {EQUIPMENT_OPTIONS.map(({ id, label }) => {
+              const selected = form.equipment.includes(id);
+              return (
+                <button
+                  type="button"
+                  key={id}
+                  onClick={() => toggleEquipment(id)}
+                  className={`text-xs py-2 px-2 rounded-sm border transition text-left ${
+                    selected
+                      ? "border-amberx bg-amberx/10 text-asphalt font-medium"
+                      : "border-gray-300 bg-gray-50 text-steelgray"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
-          <div>
-            <label className="block text-xs uppercase tracking-wide text-steelgray mb-1">Equipment</label>
-            <div className="w-full border border-gray-300 rounded-sm px-3 py-2 text-sm bg-gray-50">
-              {(profile?.equipment_types || []).join(", ") || "Not set"}
+
+          <div className="grid sm:grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="block text-xs uppercase tracking-wide text-steelgray mb-1">Fleet Size</label>
+              <select
+                value={form.fleetSize}
+                onChange={(e) => setForm({ ...form, fleetSize: e.target.value })}
+                className="w-full border border-gray-300 rounded-sm px-3 py-2 text-sm bg-white"
+              >
+                <option value="1">Just me</option>
+                <option value="1-5">1 - 5 trucks</option>
+                <option value="6-20">6 - 20 trucks</option>
+                <option value="21-50">21 - 50 trucks</option>
+                <option value="50+">50+ trucks</option>
+              </select>
             </div>
+            <Field label="Lanes you run" value={form.lanes} onChange={(v) => setForm({ ...form, lanes: v })} placeholder="CA, WA, OR" />
           </div>
-          <Field label="Lanes you run" value={form.lanes} onChange={(v) => setForm({ ...form, lanes: v })} placeholder="CA, WA, OR" />
-          <div className="sm:col-span-2">
+
+          <div className="mb-3">
             <label className="block text-xs uppercase tracking-wide text-steelgray mb-1">Bio</label>
             <textarea
               value={form.bio}
@@ -140,11 +211,13 @@ export default function TruckerDashboard({ user }) {
               rows={2}
             />
           </div>
+
           <button
             type="submit"
-            className="sm:col-span-2 bg-asphalt hover:bg-black text-white py-2.5 rounded-sm font-mono text-sm uppercase tracking-wide transition-colors"
+            disabled={saving}
+            className="w-full bg-asphalt hover:bg-black text-white py-2.5 rounded-sm font-mono text-sm uppercase tracking-wide transition-colors disabled:opacity-50"
           >
-            {details ? "Update profile" : "Save profile — get discovered"}
+            {saving ? "Saving..." : details ? "Update profile" : "Save profile — get discovered"}
           </button>
         </form>
         {!details && (
