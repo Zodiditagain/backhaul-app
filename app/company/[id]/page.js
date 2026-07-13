@@ -46,7 +46,6 @@ export default function CompanyProfile({ params }) {
         .single();
       setCurrentRole(myProfile?.role || null);
 
-      // check if a match already exists between viewer and this profile
       const truckerId = profileData?.role === "trucker" ? profileData.id : user.id;
       const partnerId = profileData?.role === "trucker" ? user.id : profileData.id;
 
@@ -101,17 +100,28 @@ export default function CompanyProfile({ params }) {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <header className="bg-asphalt px-5 py-4 flex items-center gap-3">
-        <button onClick={() => router.back()} className="text-white">
-          <ArrowLeft size={20} />
+      {/* Hero */}
+      <div className="relative h-56 sm:h-64">
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{
+            backgroundImage:
+              "url('https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=1600&q=70')",
+          }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-asphalt/60 via-asphalt/30 to-gray-100" />
+        <button
+          onClick={() => router.back()}
+          className="absolute top-5 left-5 w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 flex items-center justify-center text-white transition-colors"
+        >
+          <ArrowLeft size={18} />
         </button>
-        <h1 className="text-white font-bold">Company Profile</h1>
-      </header>
+      </div>
 
-      <div className="max-w-2xl mx-auto px-5 py-6">
-        <div className="bg-white border border-gray-300 rounded-sm p-6">
+      <div className="max-w-2xl mx-auto px-5 -mt-16 relative">
+        <div className="bg-white border border-gray-300 rounded-sm p-6 shadow-sm">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rotate-45 bg-amberx flex items-center justify-center shrink-0">
+            <div className="w-16 h-16 rotate-45 bg-amberx flex items-center justify-center shrink-0 border-4 border-white shadow-md">
               <span className="-rotate-45 text-asphalt text-2xl font-bold">{initial}</span>
             </div>
             <div>
@@ -140,7 +150,8 @@ export default function CompanyProfile({ params }) {
               </button>
             )}
             <button
-  onClick={() => canMessage && router.push(`/dashboard?openMatch=${existingMatch.id}`)}              disabled={!canMessage}
+              onClick={() => canMessage && router.push(`/dashboard?openMatch=${existingMatch.id}`)}
+              disabled={!canMessage}
               title={!canMessage ? "Connect first to start messaging" : ""}
               className={`flex-1 py-2.5 rounded-sm font-mono text-sm uppercase tracking-wide transition-colors ${
                 canMessage
@@ -153,7 +164,7 @@ export default function CompanyProfile({ params }) {
           </div>
         </div>
 
-        <div className="bg-white border border-gray-300 rounded-sm p-6 mt-4">
+        <div className="bg-white border border-gray-300 rounded-sm p-6 mt-4 mb-8">
           <h3 className="text-sm font-bold uppercase tracking-wide text-steelgray mb-4">Business Information</h3>
 
           {profile.role === "trucker" ? (
