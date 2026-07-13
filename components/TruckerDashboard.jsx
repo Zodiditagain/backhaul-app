@@ -200,8 +200,11 @@ export default function TruckerDashboard({ user }) {
                     <X size={16} />
                   </button>
                   <button
-                    onClick={() => respondToMatch(m.id, "accepted")}
-                    className="w-8 h-8 rounded-full bg-highway flex items-center justify-center text-white hover:bg-green-800 transition-colors"
+  onClick={() => respondToMatch(m.id, "accepted")}
+  className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white hover:bg-green-800 transition-colors shadow-sm"
+>
+  <Check size={16} />
+</button>                    
                   >
                     <Check size={16} />
                   </button>
