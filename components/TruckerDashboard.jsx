@@ -142,7 +142,6 @@ export default function TruckerDashboard({ user }) {
 
   return (
     <div className="space-y-8">
-      {/* Greeting */}
       <div>
         <h1 className="text-2xl font-bold text-asphalt">Good morning, {firstName} 👋</h1>
         <p className="text-steelgray text-sm mt-1">Here's what's happening in your network.</p>
@@ -154,7 +153,6 @@ export default function TruckerDashboard({ user }) {
         />
       </div>
 
-      {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <StatCard icon={<Building2 size={16} />} label="Broker Matches" value={brokerMatches.length} />
         <StatCard icon={<PackageIcon size={16} />} label="Vendor Matches" value={vendorMatches.length} />
@@ -166,7 +164,6 @@ export default function TruckerDashboard({ user }) {
         </div>
       </div>
 
-      {/* Pending requests */}
       {pendingMatches.length > 0 && (
         <section>
           <h2 className="text-xl font-bold text-asphalt border-b border-gray-300 pb-2">Pending requests</h2>
@@ -200,11 +197,8 @@ export default function TruckerDashboard({ user }) {
                     <X size={16} />
                   </button>
                   <button
-  onClick={() => respondToMatch(m.id, "accepted")}
-  className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white hover:bg-green-800 transition-colors shadow-sm"
->
-  <Check size={16} />
-</button>                    
+                    onClick={() => respondToMatch(m.id, "accepted")}
+                    className="w-8 h-8 rounded-full bg-green-600 shadow-sm flex items-center justify-center text-white hover:bg-green-800 transition-colors"
                   >
                     <Check size={16} />
                   </button>
@@ -215,7 +209,6 @@ export default function TruckerDashboard({ user }) {
         </section>
       )}
 
-      {/* Profile section */}
       <section>
         <div className="flex items-center justify-between border-b border-gray-300 pb-2">
           <h2 className="text-xl font-bold text-asphalt">Your carrier profile</h2>
@@ -285,7 +278,6 @@ export default function TruckerDashboard({ user }) {
         )}
       </section>
 
-      {/* Connections + conversation */}
       <div className="grid md:grid-cols-2 gap-6">
         <section>
           <h2 className="text-xl font-bold text-asphalt border-b border-gray-300 pb-2">Companies interested in you</h2>
