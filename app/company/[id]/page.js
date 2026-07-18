@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Building2, Truck as TruckIcon, MapPin } from "lucide-react";
+import { ArrowLeft, Building2, Truck as TruckIcon, MapPin, FileText, TrendingUp, CreditCard, Shield } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 
 export default function CompanyProfile({ params }) {
@@ -73,6 +73,7 @@ export default function CompanyProfile({ params }) {
       trucker_id: profile.id,
       partner_id: currentUser.id,
       partner_role: currentRole,
+      status: "pending",
     });
     setConnecting(false);
     if (!error) {
@@ -96,11 +97,10 @@ export default function CompanyProfile({ params }) {
     currentUser.id !== profile.id &&
     !existingMatch;
 
-  const canMessage = !!existingMatch;
+  const canMessage = existingMatch?.status === "accepted";
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Hero */}
       <div className="relative h-56 sm:h-64">
         <div
           className="absolute inset-0 bg-cover bg-center"
@@ -134,7 +134,9 @@ export default function CompanyProfile({ params }) {
                 <p className="text-xs text-gray-400 mt-0.5">Member since {memberSince}</p>
               )}
               {existingMatch && (
-                <p className="text-xs text-highway font-mono uppercase tracking-wide mt-1">Connected</p>
+                <p className={`text-xs font-mono uppercase tracking-wide mt-1 ${existingMatch.status === "accepted" ? "text-highway" : "text-amberx"}`}>
+                  {existingMatch.status === "accepted" ? "Connected" : "Request Pending"}
+                </p>
               )}
             </div>
           </div>
@@ -181,8 +183,34 @@ export default function CompanyProfile({ params }) {
             </div>
           ) : (
             <div className="grid sm:grid-cols-2 gap-4">
+              <InfoRow icon={<FileText size={16} />} label="DOT Number" value={profile.dot_number} />
+              <InfoRow icon={<TrendingUp size={16} />} label="Weekly Volume" value={profile.weekly_volume} />
               <InfoRow icon={<MapPin size={16} />} label="Coverage Area" value={profile.coverage_area} />
               <InfoRow icon={<Building2 size={16} />} label="Company Size" value={profile.company_size} />
+              <InfoRow icon={<CreditCard size={16} />} label="Typical Payment Terms" value={profile.payment_terms} />
+              <InfoRow
+                icon={<Shield size={16} />}
+                label="Insurance Requirements"
+                value={
+                  profile.insurance_cargo || profile.insurance_liability
+                    ? [profile.insurance_cargo, profile.insurance_liability].filter(Boolean).join(" / ")
+                    : null
+                }
+              />
+              <div className="sm:col-span-2">
+                <span className="text-xs uppercase tracking-wide text-steelgray">Equipment Needed</span>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {(profile.equipment_needed || []).length > 0 ? (
+                    profile.equipment_needed.map((s) => (
+                      <span key={s} className="text-xs bg-gray-100 border border-gray-300 rounded-sm px-2 py-1">
+                        {s}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-sm text-gray-400 italic">Not provided</span>
+                  )}
+                </div>
+              </div>
               <div className="sm:col-span-2">
                 <span className="text-xs uppercase tracking-wide text-steelgray">Services Offered</span>
                 <div className="flex flex-wrap gap-2 mt-2">
