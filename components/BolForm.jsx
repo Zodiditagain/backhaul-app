@@ -66,7 +66,6 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
   useEffect(() => {
     async function init() {
       if (existingBol) {
-        // Editing an existing draft — load it
         const { id, created_at, updated_at, status, correction_note, match_id, broker_id, trucker_id, driver_name, driver_phone, truck_number, trailer_number, ...rest } = existingBol;
         setForm((prev) => ({ ...prev, ...Object.fromEntries(Object.entries(rest).map(([k, v]) => [k, v ?? ""])) }));
         const { data: itemData } = await supabase
@@ -78,13 +77,11 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
           setItems(itemData.map((i) => ({ ...i, hazmat: Boolean(i.hazmat) })));
         }
       } else {
-        // New BOL — prefill carrier info from the trucker's profile
         const { data: trucker } = await supabase
           .from("profiles")
           .select("company_name, dot_number, mc_number")
           .eq("id", match.trucker_id)
           .single();
-        // Generate a BOL number: BH-YEAR-random
         const rand = String(Math.floor(Math.random() * 90000) + 10000);
         setForm((prev) => ({
           ...prev,
@@ -144,7 +141,6 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
         setSaving(false);
         return;
       }
-      // Replace items: delete old, insert current
       await supabase.from("bol_items").delete().eq("bol_id", bolId);
     } else {
       const { data: inserted, error: insertError } = await supabase
@@ -172,7 +168,6 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
       }
     }
 
-    // Drop a message into the conversation so the carrier sees it
     if (status === "sent") {
       await supabase.from("messages").insert({
         match_id: match.id,
@@ -187,22 +182,21 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
   }
 
   return (
-    <div className="fixed inset-0 bg-asphalt/80 z-30 flex items-start justify-center overflow-y-auto py-8 px-4">
-      <div className="bg-white rounded-sm w-full max-w-2xl border border-gray-300">
-        <div className="bg-asphalt text-white px-5 py-4 flex items-center justify-between sticky top-0 z-10">
+    <div className="fixed inset-0 bg-asphalt/80 z-40 flex items-center justify-center px-4 py-6">
+      <div className="bg-white rounded-sm w-full max-w-2xl border border-gray-300 flex flex-col max-h-[90vh]">
+        <div className="bg-asphalt text-white px-5 py-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <FileText size={18} />
             <span className="text-lg font-bold">Bill of Lading</span>
           </div>
-          <button onClick={onClose} className="text-gray-300 hover:text-white">
+          <button type="button" onClick={onClose} className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-sm">
             <X size={20} />
           </button>
         </div>
 
-        <div className="p-5 space-y-6">
+        <div className="flex-1 overflow-y-auto p-5 space-y-6">
           {error && <p className="text-alertred text-sm bg-alertred/10 border border-alertred/30 rounded-sm px-3 py-2">{error}</p>}
 
-          {/* Shipment information */}
           <section>
             <h3 className="text-sm font-bold uppercase tracking-wide text-steelgray border-b border-gray-200 pb-2 mb-3">Shipment Information</h3>
             <div className="grid sm:grid-cols-2 gap-3">
@@ -215,7 +209,6 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
             </div>
           </section>
 
-          {/* Shipper */}
           <section>
             <h3 className="text-sm font-bold uppercase tracking-wide text-steelgray border-b border-gray-200 pb-2 mb-3">Shipper</h3>
             <div className="grid sm:grid-cols-2 gap-3">
@@ -232,7 +225,6 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
             <TextArea label="Pickup Instructions" value={form.pickup_instructions} onChange={(v) => set("pickup_instructions", v)} />
           </section>
 
-          {/* Consignee */}
           <section>
             <h3 className="text-sm font-bold uppercase tracking-wide text-steelgray border-b border-gray-200 pb-2 mb-3">Consignee</h3>
             <div className="grid sm:grid-cols-2 gap-3">
@@ -248,8 +240,6 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
             </div>
             <TextArea label="Delivery Instructions" value={form.delivery_instructions} onChange={(v) => set("delivery_instructions", v)} />
           </section>
-
-          {/* Carrier */}
           <section>
             <h3 className="text-sm font-bold uppercase tracking-wide text-steelgray border-b border-gray-200 pb-2 mb-3">Carrier</h3>
             <div className="grid sm:grid-cols-2 gap-3">
@@ -274,7 +264,6 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
             </p>
           </section>
 
-          {/* Freight details */}
           <section>
             <h3 className="text-sm font-bold uppercase tracking-wide text-steelgray border-b border-gray-200 pb-2 mb-3">Freight Details</h3>
             <div className="space-y-4">
@@ -328,3 +317,88 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
             <button
               type="button"
               onClick={addItem}
+              className="mt-3 flex items-center gap-1.5 text-xs text-steelgray hover:text-amberx border border-gray-300 hover:border-amberx rounded-sm px-3 py-2"
+            >
+              <Plus size={14} /> Add Another Item
+            </button>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-bold uppercase tracking-wide text-steelgray border-b border-gray-200 pb-2 mb-3">Charges & Freight Terms</h3>
+            <label className="block text-xs uppercase tracking-wide text-steelgray mb-2">Freight Charges</label>
+            <div className="flex gap-2 mb-3">
+              {["Prepaid", "Collect", "Third Party"].map((c) => (
+                <button
+                  type="button"
+                  key={c}
+                  onClick={() => set("freight_charges", c)}
+                  className={`text-xs px-3 py-2 rounded-sm border transition ${
+                    form.freight_charges === c
+                      ? "bg-asphalt text-white border-asphalt font-semibold"
+                      : "border-gray-300 text-steelgray"
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <Field label="Declared Value" value={form.declared_value} onChange={(v) => set("declared_value", v)} />
+              <Field label="COD Amount" value={form.cod_amount} onChange={(v) => set("cod_amount", v)} />
+              <Field label="Temperature Requirement" value={form.temperature_requirement} onChange={(v) => set("temperature_requirement", v)} />
+              <Field label="Seal Number" value={form.seal_number} onChange={(v) => set("seal_number", v)} />
+            </div>
+            <TextArea label="Special Instructions" value={form.special_instructions} onChange={(v) => set("special_instructions", v)} />
+          </section>
+        </div>
+
+        <div className="border-t border-gray-300 px-5 py-4 flex gap-3 shrink-0 bg-white">
+          <button
+            type="button"
+            onClick={() => save("draft")}
+            disabled={saving}
+            className="flex-1 border border-gray-300 hover:border-asphalt text-asphalt py-2.5 rounded-sm font-mono text-sm uppercase tracking-wide transition-colors disabled:opacity-50"
+          >
+            {saving ? "Saving..." : "Save Draft"}
+          </button>
+          <button
+            type="button"
+            onClick={() => save("sent")}
+            disabled={saving}
+            className="flex-1 bg-asphalt hover:bg-black text-white py-2.5 rounded-sm font-mono text-sm uppercase tracking-wide transition-colors disabled:opacity-50"
+          >
+            {saving ? "Saving..." : "Send to Carrier"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, value, onChange, type = "text" }) {
+  return (
+    <div>
+      <label className="block text-xs uppercase tracking-wide text-steelgray mb-1">{label}</label>
+      <input
+        type={type}
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full border border-gray-300 rounded-sm px-3 py-2 text-sm"
+      />
+    </div>
+  );
+}
+
+function TextArea({ label, value, onChange }) {
+  return (
+    <div className="mt-3">
+      <label className="block text-xs uppercase tracking-wide text-steelgray mb-1">{label}</label>
+      <textarea
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        rows={2}
+        className="w-full border border-gray-300 rounded-sm px-3 py-2 text-sm"
+      />
+    </div>
+  );
+}
