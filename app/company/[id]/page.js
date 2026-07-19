@@ -1,728 +1,351 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { Truck } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Building2, Truck as TruckIcon, MapPin, FileText, TrendingUp, CreditCard, Shield, Briefcase, Globe } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 
-const VENDOR_CATEGORIES = [
-  { id: "factoring", label: "Factoring Company" },
-  { id: "fuel", label: "Fuel / Truck Stop Provider" },
-  { id: "insurance", label: "Commercial Insurance" },
-  { id: "repair", label: "Truck Repair / Maintenance" },
-  { id: "roadside", label: "Roadside Assistance" },
-  { id: "dealer", label: "Truck or Trailer Dealer" },
-  { id: "rental", label: "Equipment Rental / Leasing" },
-  { id: "eld", label: "ELD / Technology Provider" },
-  { id: "compliance", label: "Compliance / Permit Service" },
-  { id: "parking", label: "Truck Parking / Warehousing" },
-  { id: "accounting", label: "Accounting / Tax Service" },
-  { id: "legal", label: "Legal Service" },
-  { id: "staffing", label: "Recruiting / Staffing" },
-  { id: "other", label: "Other Trucking Service" },
-];
+export default function CompanyProfile({ params }) {
+  const router = useRouter();
+  const { id } = params;
+  const [profile, setProfile] = useState(null);
+  const [truckerDetails, setTruckerDetails] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [currentRole, setCurrentRole] = useState(null);
+  const [existingMatch, setExistingMatch] = useState(null);
+  const [connecting, setConnecting] = useState(false);
+  const [justConnected, setJustConnected] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-// Categories with a dedicated Step 3 question set
-const DETAILED_CATEGORIES = ["factoring", "fuel", "insurance", "repair"];
+  async function load() {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const user = sessionData?.session?.user || null;
+    setCurrentUser(user);
 
-const FACTORING_SERVICES = [
-  "Recourse factoring",
-  "Non-recourse factoring",
-  "Same-day funding",
-  "Fuel advances",
-  "Broker credit checks",
-  "Collections assistance",
-];
-
-const FUEL_SERVICES = [
-  "Diesel",
-  "DEF",
-  "Fuel cards",
-  "Fuel discounts",
-  "Truck parking",
-  "Reserved parking",
-  "Showers",
-  "Food",
-  "Truck maintenance",
-  "Tire service",
-  "Weigh station",
-  "Roadside assistance",
-];
-
-const INSURANCE_PRODUCTS = [
-  "Primary liability",
-  "Cargo insurance",
-  "Physical damage",
-  "General liability",
-  "Bobtail",
-  "Non-trucking liability",
-  "Occupational accident",
-];
-
-const REPAIR_SERVICES = [
-  "Diesel repair",
-  "Mobile mechanic",
-  "Tire repair",
-  "Towing",
-  "Trailer repair",
-  "Preventive maintenance",
-  "Emergency roadside service",
-];
-
-const STATES = [
-  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA",
-  "KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
-  "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT",
-  "VA","WA","WV","WI","WY",
-];
-
-export default function Signup() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [companyName, setCompanyName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [website, setWebsite] = useState("");
-  const [role, setRole] = useState("trucker");
-  const [error, setError] = useState("");
-  const [done, setDone] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  // Vendor wizard state
-  const [step, setStep] = useState(1);
-  const [userId, setUserId] = useState(null);
-  const [vendorCategories, setVendorCategories] = useState([]);
-  const [vendorDetails, setVendorDetails] = useState({});
-  const [serviceArea, setServiceArea] = useState("local");
-  const [businessAddress, setBusinessAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [zip, setZip] = useState("");
-  const [remoteService, setRemoteService] = useState(false);
-  const [about, setAbout] = useState("");
-
-  function toggleVendorCategory(id) {
-    setVendorCategories((prev) =>
-      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
-    );
-  }
-
-  function updateVendorDetail(category, key, value) {
-    setVendorDetails((prev) => ({
-      ...prev,
-      [category]: { ...(prev[category] || {}), [key]: value },
-    }));
-  }
-
-  function toggleVendorDetailArray(category, key, value) {
-    setVendorDetails((prev) => {
-      const current = prev[category]?.[key] || [];
-      const updated = current.includes(value)
-        ? current.filter((v) => v !== value)
-        : [...current, value];
-      return { ...prev, [category]: { ...(prev[category] || {}), [key]: updated } };
-    });
-  }
-
-  // Step 1 submit — handles trucker/broker (full signup) and vendor (account creation only)
-  async function handleStep1Submit(e) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
-    if (signUpError) {
-      setError(signUpError.message);
-      setLoading(false);
-      return;
-    }
-
-    if (!data.user) {
-      setError("Something went wrong creating your account.");
-      setLoading(false);
-      return;
-    }
-
-    if (role !== "vendor") {
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .insert({ id: data.user.id, role, company_name: companyName });
-      if (profileError) {
-        setError(profileError.message);
-        setLoading(false);
-        return;
-      }
-      setLoading(false);
-      setDone(true);
-      return;
-    }
-
-    // Vendor: create a minimal profile row now, fill in the rest across the wizard
-    const { error: profileError } = await supabase.from("profiles").insert({
-      id: data.user.id,
-      role: "vendor",
-      company_name: companyName,
-      phone,
-      website: website || null,
-    });
-    if (profileError) {
-      setError(profileError.message);
-      setLoading(false);
-      return;
-    }
-
-    setUserId(data.user.id);
-    setLoading(false);
-    setStep(2);
-  }
-
-  function handleStep2Continue() {
-    setError("");
-    if (vendorCategories.length === 0) {
-      setError("Select at least one vendor category to continue.");
-      return;
-    }
-    const hasDetailedCategory = vendorCategories.some((c) => DETAILED_CATEGORIES.includes(c));
-    setStep(hasDetailedCategory ? 3 : 4);
-  }
-
-  async function handleFinalSubmit(e) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    const { error: updateError } = await supabase
+    const { data: profileData } = await supabase
       .from("profiles")
-      .update({
-        vendor_categories: vendorCategories,
-        vendor_details: vendorDetails,
-        service_area: serviceArea,
-        business_address: businessAddress || null,
-        city: city || null,
-        state: state || null,
-        zip: zip || null,
-        remote_service: remoteService,
-        about: about || null,
-        onboarding_completed: true,
-      })
-      .eq("id", userId);
+      .select("*")
+      .eq("id", id)
+      .single();
+    setProfile(profileData);
+
+    if (profileData?.role === "trucker") {
+      const { data: details } = await supabase
+        .from("trucker_details")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+      setTruckerDetails(details);
+    }
+
+    if (user) {
+      const { data: myProfile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+      setCurrentRole(myProfile?.role || null);
+
+      const truckerId = profileData?.role === "trucker" ? profileData.id : user.id;
+      const partnerId = profileData?.role === "trucker" ? user.id : profileData.id;
+
+      const { data: matchRow } = await supabase
+        .from("matches")
+        .select("*")
+        .eq("trucker_id", truckerId)
+        .eq("partner_id", partnerId)
+        .maybeSingle();
+      setExistingMatch(matchRow || null);
+    }
 
     setLoading(false);
-    if (updateError) {
-      setError(updateError.message);
-      return;
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  async function handleConnect() {
+    if (!currentUser || !profile) return;
+    setConnecting(true);
+    const { error } = await supabase.from("matches").insert({
+      trucker_id: profile.id,
+      partner_id: currentUser.id,
+      partner_role: currentRole,
+      status: "pending",
+    });
+    setConnecting(false);
+    if (!error) {
+      setJustConnected(true);
+      load();
     }
-    setDone(true);
   }
 
-  if (done) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6 text-center">
-        <div className="max-w-sm">
-          <h1 className="text-2xl font-bold text-white mb-2">Check your email</h1>
-          <p className="text-gray-300 text-sm">
-            We sent a confirmation link to <strong>{email}</strong>. Click it, then come back and log in.
-          </p>
-          <Link href="/login" className="inline-block mt-4 text-blue-400 underline text-sm">
-            Go to login
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <div className="p-8 text-steelgray">Loading profile...</div>;
+  if (!profile) return <div className="p-8 text-alertred">Company not found.</div>;
 
-  const isVendor = role === "vendor";
-  const totalVendorSteps = 4;
+  const initial = (profile.company_name || "?").charAt(0).toUpperCase();
+  const memberSince = profile.created_at
+    ? new Date(profile.created_at).toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    : null;
+
+  const canConnect =
+    currentUser &&
+    profile.role === "trucker" &&
+    (currentRole === "broker" || currentRole === "vendor") &&
+    currentUser.id !== profile.id &&
+    !existingMatch;
+
+  const canMessage = existingMatch?.status === "accepted";
+
+  const VENDOR_CATEGORY_LABELS = {
+    factoring: "Factoring Company",
+    fuel: "Fuel / Truck Stop Provider",
+    insurance: "Commercial Insurance",
+    repair: "Truck Repair / Maintenance",
+    roadside: "Roadside Assistance",
+    dealer: "Truck or Trailer Dealer",
+    rental: "Equipment Rental / Leasing",
+    eld: "ELD / Technology Provider",
+    compliance: "Compliance / Permit Service",
+    parking: "Truck Parking / Warehousing",
+    accounting: "Accounting / Tax Service",
+    legal: "Legal Service",
+    staffing: "Recruiting / Staffing",
+    other: "Other Trucking Service",
+  };
+
+  const SERVICE_AREA_LABELS = {
+    local: "Local",
+    regional: "Regional",
+    multi_state: "Multiple States",
+    nationwide: "Nationwide",
+  };
 
   return (
-    <div className="min-h-screen relative flex flex-col items-center px-6 py-10 text-center overflow-hidden">
-      <div
-        className="absolute inset-0 bg-cover bg-center"
-        style={{
-          backgroundImage:
-            "url('https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=1600&q=70')",
-        }}
-      />
-      <div className="absolute inset-0 bg-slate-950/85" />
+    <div className="min-h-screen bg-gray-100">
+      <div className="relative h-56 sm:h-64">
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{
+            backgroundImage:
+              "url('https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=1600&q=70')",
+          }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-asphalt/60 via-asphalt/30 to-gray-100" />
+        <button
+          onClick={() => router.back()}
+          className="absolute top-5 left-5 w-9 h-9 rounded-full bg-black/40 hover:bg-black/60 flex items-center justify-center text-white transition-colors"
+        >
+          <ArrowLeft size={18} />
+        </button>
+      </div>
 
-      <div className="relative z-10 flex flex-col items-center w-full">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 rotate-45 bg-blue-600 flex items-center justify-center rounded-md">
-            <Truck className="-rotate-45" size={22} color="#ffffff" />
-          </div>
-          <div className="text-left">
-            <p className="text-white font-bold tracking-wide leading-tight">BACKHAUL</p>
-            <p className="text-blue-400 text-xs tracking-widest">NETWORK</p>
-          </div>
-        </div>
-
-        <div className="w-full max-w-sm text-left">
-          {isVendor && step > 1 && (
-            <div className="mb-4">
-              <p className="text-xs text-gray-400 mb-2 text-center">
-                Step {step} of {totalVendorSteps}
-              </p>
-              <div className="w-full h-1.5 bg-slate-800 rounded-full">
-                <div
-                  className="h-1.5 bg-blue-600 rounded-full transition-all"
-                  style={{ width: `${(step / totalVendorSteps) * 100}%` }}
-                />
-              </div>
+      <div className="max-w-2xl mx-auto px-5 -mt-16 relative">
+        <div className="bg-white border border-gray-300 rounded-sm p-6 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rotate-45 bg-amberx flex items-center justify-center shrink-0 border-4 border-white shadow-md">
+              <span className="-rotate-45 text-asphalt text-2xl font-bold">{initial}</span>
             </div>
-          )}
-
-          {/* STEP 1 — Account */}
-          {step === 1 && (
-            <form onSubmit={handleStep1Submit}>
-              <h1 className="text-2xl font-bold text-white mb-1 text-center">
-                {isVendor ? "Create a Vendor Account" : "Create an account"}
-              </h1>
-              <p className="text-gray-300 text-sm mb-6 text-center">
-                {isVendor
-                  ? "Connect your services with trucking companies and freight brokers."
-                  : "Join the network connecting carriers, brokers, and vendors."}
+            <div>
+              <h2 className="text-xl font-bold text-asphalt">{profile.company_name}</h2>
+              <p className="text-steelgray text-sm capitalize">
+                {profile.role}
+                {profile.coverage_area ? ` • ${profile.coverage_area}` : ""}
               </p>
-
-              {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
-
-              <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">I am a...</label>
-              <div className="grid grid-cols-3 gap-2 mb-4">
-                {[
-                  { id: "trucker", label: "Trucking Co." },
-                  { id: "broker", label: "Broker" },
-                  { id: "vendor", label: "Vendor" },
-                ].map((r) => (
-                  <button
-                    type="button"
-                    key={r.id}
-                    onClick={() => setRole(r.id)}
-                    className={`text-xs py-2 rounded-sm border transition ${
-                      role === r.id
-                        ? "bg-blue-600 border-blue-600 text-white font-semibold"
-                        : "border-slate-700 text-gray-300 bg-slate-900/60"
-                    }`}
-                  >
-                    {r.label}
-                  </button>
-                ))}
-              </div>
-
-              <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Company name</label>
-              <input
-                required
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="Enter legal company name"
-                className="w-full bg-slate-900/70 border border-slate-700 rounded-sm px-3 py-2 mb-4 text-sm text-white focus:outline-none focus:border-blue-500"
-              />
-
-              <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">
-                {isVendor ? "Business email" : "Email"}
-              </label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder={isVendor ? "Enter company email" : ""}
-                className="w-full bg-slate-900/70 border border-slate-700 rounded-sm px-3 py-2 mb-4 text-sm text-white focus:outline-none focus:border-blue-500"
-              />
-
-              <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Password</label>
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Create password"
-                className="w-full bg-slate-900/70 border border-slate-700 rounded-sm px-3 py-2 mb-4 text-sm text-white focus:outline-none focus:border-blue-500"
-              />
-
-              {isVendor && (
-                <>
-                  <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Phone number</label>
-                  <input
-                    required
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="Enter business phone"
-                    className="w-full bg-slate-900/70 border border-slate-700 rounded-sm px-3 py-2 mb-4 text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
-
-                  <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Website — optional</label>
-                  <input
-                    value={website}
-                    onChange={(e) => setWebsite(e.target.value)}
-                    placeholder="Enter website address"
-                    className="w-full bg-slate-900/70 border border-slate-700 rounded-sm px-3 py-2 mb-4 text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
-                </>
+              {memberSince && (
+                <p className="text-xs text-gray-400 mt-0.5">Member since {memberSince}</p>
               )}
-
-              {role !== "trucker" && !isVendor && (
-                <p className="text-xs text-gray-400 mb-3 italic">
-                  Broker accounts will need a subscription to unlock full access once billing is added.
+              {existingMatch && (
+                <p className={`text-xs font-mono uppercase tracking-wide mt-1 ${existingMatch.status === "accepted" ? "text-highway" : "text-amberx"}`}>
+                  {existingMatch.status === "accepted" ? "Connected" : "Request Pending"}
                 </p>
               )}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-md font-semibold text-sm transition disabled:opacity-50"
-              >
-                {loading ? "Creating account..." : isVendor ? "Continue to Vendor Profile" : "Sign up"}
-              </button>
-
-              <p className="text-sm text-gray-400 mt-4 text-center">
-                Already have an account?{" "}
-                <Link href="/login" className="text-blue-400 underline">Log in</Link>
-              </p>
-            </form>
-          )}
-
-          {/* STEP 2 — Vendor category */}
-          {step === 2 && (
-            <div>
-              <h1 className="text-2xl font-bold text-white mb-1 text-center">What type of vendor are you?</h1>
-              <p className="text-gray-300 text-sm mb-6 text-center">
-                Select all services your company provides.
-              </p>
-
-              {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
-
-              <div className="grid grid-cols-1 gap-2 mb-6">
-                {VENDOR_CATEGORIES.map((c) => {
-                  const selected = vendorCategories.includes(c.id);
-                  return (
-                    <button
-                      type="button"
-                      key={c.id}
-                      onClick={() => toggleVendorCategory(c.id)}
-                      className={`text-sm py-2.5 px-3 rounded-sm border text-left transition ${
-                        selected
-                          ? "bg-blue-600 border-blue-600 text-white font-semibold"
-                          : "border-slate-700 text-gray-300 bg-slate-900/60"
-                      }`}
-                    >
-                      {c.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <button
-                type="button"
-                onClick={handleStep2Continue}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-md font-semibold text-sm transition"
-              >
-                Continue
-              </button>
             </div>
-          )}
+          </div>
 
-          {/* STEP 3 — Category-specific services */}
-          {step === 3 && (
-            <div>
-              <h1 className="text-2xl font-bold text-white mb-1 text-center">Tell us more about your services</h1>
-              <p className="text-gray-300 text-sm mb-6 text-center">
-                This helps carriers and brokers find exactly what they need.
-              </p>
-
-              {vendorCategories.includes("factoring") && (
-                <div className="mb-6 pb-6 border-b border-slate-800">
-                  <h2 className="text-sm font-bold text-white mb-3">Factoring services</h2>
-                  <p className="text-xs text-gray-400 mb-2">What factoring services do you provide?</p>
-                  <div className="grid grid-cols-1 gap-2 mb-4">
-                    {FACTORING_SERVICES.map((s) => {
-                      const selected = (vendorDetails.factoring?.services || []).includes(s);
-                      return (
-                        <button
-                          type="button"
-                          key={s}
-                          onClick={() => toggleVendorDetailArray("factoring", "services", s)}
-                          className={`text-xs py-2 px-3 rounded-sm border text-left transition ${
-                            selected
-                              ? "bg-blue-600 border-blue-600 text-white font-semibold"
-                              : "border-slate-700 text-gray-300 bg-slate-900/60"
-                          }`}
-                        >
-                          {s}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Starting factoring rate — optional</label>
-                  <input
-                    value={vendorDetails.factoring?.startingRate || ""}
-                    onChange={(e) => updateVendorDetail("factoring", "startingRate", e.target.value)}
-                    className="w-full bg-slate-900/70 border border-slate-700 rounded-sm px-3 py-2 mb-3 text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
-                  <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Funding time</label>
-                  <select
-                    value={vendorDetails.factoring?.fundingTime || ""}
-                    onChange={(e) => updateVendorDetail("factoring", "fundingTime", e.target.value)}
-                    className="w-full bg-slate-900/70 border border-slate-700 rounded-sm px-3 py-2 mb-3 text-sm text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">Select...</option>
-                    <option value="same_day">Same day</option>
-                    <option value="24_hours">24 hours</option>
-                    <option value="48_hours">48 hours</option>
-                  </select>
-                  <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Contract required?</label>
-                  <select
-                    value={vendorDetails.factoring?.contractRequired || ""}
-                    onChange={(e) => updateVendorDetail("factoring", "contractRequired", e.target.value)}
-                    className="w-full bg-slate-900/70 border border-slate-700 rounded-sm px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">Select...</option>
-                    <option value="yes">Yes</option>
-                    <option value="no">No</option>
-                    <option value="both">Both options</option>
-                  </select>
-                </div>
-              )}
-
-              {vendorCategories.includes("fuel") && (
-                <div className="mb-6 pb-6 border-b border-slate-800">
-                  <h2 className="text-sm font-bold text-white mb-3">Fuel / truck stop services</h2>
-                  <p className="text-xs text-gray-400 mb-2">Which services do your locations provide?</p>
-                  <div className="grid grid-cols-1 gap-2 mb-4">
-                    {FUEL_SERVICES.map((s) => {
-                      const selected = (vendorDetails.fuel?.services || []).includes(s);
-                      return (
-                        <button
-                          type="button"
-                          key={s}
-                          onClick={() => toggleVendorDetailArray("fuel", "services", s)}
-                          className={`text-xs py-2 px-3 rounded-sm border text-left transition ${
-                            selected
-                              ? "bg-blue-600 border-blue-600 text-white font-semibold"
-                              : "border-slate-700 text-gray-300 bg-slate-900/60"
-                          }`}
-                        >
-                          {s}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Number of locations</label>
-                  <input
-                    type="number"
-                    value={vendorDetails.fuel?.numLocations || ""}
-                    onChange={(e) => updateVendorDetail("fuel", "numLocations", e.target.value)}
-                    className="w-full bg-slate-900/70 border border-slate-700 rounded-sm px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
-                  <p className="text-xs text-gray-500 italic mt-2">
-                    You'll be able to add individual locations from your dashboard after signup.
-                  </p>
-                </div>
-              )}
-
-              {vendorCategories.includes("insurance") && (
-                <div className="mb-6 pb-6 border-b border-slate-800">
-                  <h2 className="text-sm font-bold text-white mb-3">Insurance products</h2>
-                  <p className="text-xs text-gray-400 mb-2">Insurance products offered</p>
-                  <div className="grid grid-cols-1 gap-2 mb-4">
-                    {INSURANCE_PRODUCTS.map((s) => {
-                      const selected = (vendorDetails.insurance?.products || []).includes(s);
-                      return (
-                        <button
-                          type="button"
-                          key={s}
-                          onClick={() => toggleVendorDetailArray("insurance", "products", s)}
-                          className={`text-xs py-2 px-3 rounded-sm border text-left transition ${
-                            selected
-                              ? "bg-blue-600 border-blue-600 text-white font-semibold"
-                              : "border-slate-700 text-gray-300 bg-slate-900/60"
-                          }`}
-                        >
-                          {s}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">States licensed in</label>
-                  <input
-                    value={vendorDetails.insurance?.statesLicensed || ""}
-                    onChange={(e) => updateVendorDetail("insurance", "statesLicensed", e.target.value)}
-                    placeholder="e.g. FL, GA, TX"
-                    className="w-full bg-slate-900/70 border border-slate-700 rounded-sm px-3 py-2 mb-3 text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
-                  <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Minimum fleet size</label>
-                  <select
-                    value={vendorDetails.insurance?.minFleetSize || ""}
-                    onChange={(e) => updateVendorDetail("insurance", "minFleetSize", e.target.value)}
-                    className="w-full bg-slate-900/70 border border-slate-700 rounded-sm px-3 py-2 mb-3 text-sm text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">Select...</option>
-                    <option value="owner_operator">Owner-operator</option>
-                    <option value="2-10">2 – 10 trucks</option>
-                    <option value="10+">10+ trucks</option>
-                  </select>
-                  <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Quote turnaround time</label>
-                  <select
-                    value={vendorDetails.insurance?.quoteTurnaround || ""}
-                    onChange={(e) => updateVendorDetail("insurance", "quoteTurnaround", e.target.value)}
-                    className="w-full bg-slate-900/70 border border-slate-700 rounded-sm px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">Select...</option>
-                    <option value="same_day">Same day</option>
-                    <option value="24_hours">24 hours</option>
-                    <option value="2-3_days">2 - 3 days</option>
-                  </select>
-                </div>
-              )}
-
-              {vendorCategories.includes("repair") && (
-                <div className="mb-6 pb-6 border-b border-slate-800">
-                  <h2 className="text-sm font-bold text-white mb-3">Repair services</h2>
-                  <p className="text-xs text-gray-400 mb-2">Services offered</p>
-                  <div className="grid grid-cols-1 gap-2 mb-4">
-                    {REPAIR_SERVICES.map((s) => {
-                      const selected = (vendorDetails.repair?.services || []).includes(s);
-                      return (
-                        <button
-                          type="button"
-                          key={s}
-                          onClick={() => toggleVendorDetailArray("repair", "services", s)}
-                          className={`text-xs py-2 px-3 rounded-sm border text-left transition ${
-                            selected
-                              ? "bg-blue-600 border-blue-600 text-white font-semibold"
-                              : "border-slate-700 text-gray-300 bg-slate-900/60"
-                          }`}
-                        >
-                          {s}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Service radius (miles)</label>
-                  <input
-                    type="number"
-                    value={vendorDetails.repair?.serviceRadius || ""}
-                    onChange={(e) => updateVendorDetail("repair", "serviceRadius", e.target.value)}
-                    className="w-full bg-slate-900/70 border border-slate-700 rounded-sm px-3 py-2 mb-3 text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
-                  <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">24-hour service?</label>
-                  <select
-                    value={vendorDetails.repair?.twentyFourHour || ""}
-                    onChange={(e) => updateVendorDetail("repair", "twentyFourHour", e.target.value)}
-                    className="w-full bg-slate-900/70 border border-slate-700 rounded-sm px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">Select...</option>
-                    <option value="yes">Yes</option>
-                    <option value="no">No</option>
-                  </select>
-                </div>
-              )}
-
+          <div className="flex gap-3 mt-5">
+            {canConnect && (
               <button
-                type="button"
-                onClick={() => setStep(4)}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-md font-semibold text-sm transition"
+                onClick={handleConnect}
+                disabled={connecting}
+                className="flex-1 bg-asphalt hover:bg-black text-white py-2.5 rounded-sm font-mono text-sm uppercase tracking-wide transition-colors disabled:opacity-50"
               >
-                Continue
+                {connecting ? "Connecting..." : justConnected ? "Connected" : "Connect"}
               </button>
-            </div>
-          )}
+            )}
+            <button
+              onClick={() => canMessage && router.push(`/dashboard?openMatch=${existingMatch.id}`)}
+              disabled={!canMessage}
+              title={!canMessage ? "Connect first to start messaging" : ""}
+              className={`flex-1 py-2.5 rounded-sm font-mono text-sm uppercase tracking-wide transition-colors ${
+                canMessage
+                  ? "border border-gray-300 hover:border-asphalt"
+                  : "border border-gray-200 text-gray-400 cursor-not-allowed"
+              }`}
+            >
+              Message
+            </button>
+          </div>
+        </div>
 
-          {/* STEP 4 — Service area, address, about */}
-          {step === 4 && (
-            <form onSubmit={handleFinalSubmit}>
-              <h1 className="text-2xl font-bold text-white mb-1 text-center">Service area & profile</h1>
-              <p className="text-gray-300 text-sm mb-6 text-center">Almost done.</p>
+        <div className="bg-white border border-gray-300 rounded-sm p-6 mt-4 mb-8">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-steelgray mb-4">Business Information</h3>
 
-              {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
-
-              <label className="block text-xs uppercase tracking-wide text-gray-400 mb-2">Service area</label>
-              <div className="grid grid-cols-2 gap-2 mb-4">
-                {[
-                  { id: "local", label: "Local" },
-                  { id: "regional", label: "Regional" },
-                  { id: "multi_state", label: "Multiple States" },
-                  { id: "nationwide", label: "Nationwide" },
-                ].map((s) => (
-                  <button
-                    type="button"
-                    key={s.id}
-                    onClick={() => setServiceArea(s.id)}
-                    className={`text-xs py-2.5 rounded-sm border transition ${
-                      serviceArea === s.id
-                        ? "bg-blue-600 border-blue-600 text-white font-semibold"
-                        : "border-slate-700 text-gray-300 bg-slate-900/60"
-                    }`}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-
-              <label className="flex items-center gap-2 mb-4 text-xs text-gray-300">
-                <input
-                  type="checkbox"
-                  checked={remoteService}
-                  onChange={(e) => setRemoteService(e.target.checked)}
-                  className="rounded border-slate-700"
-                />
-                We provide services nationwide or remotely
-              </label>
-
-              {!remoteService && (
-                <>
-                  <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Business address</label>
-                  <input
-                    value={businessAddress}
-                    onChange={(e) => setBusinessAddress(e.target.value)}
-                    placeholder="Street address"
-                    className="w-full bg-slate-900/70 border border-slate-700 rounded-sm px-3 py-2 mb-3 text-sm text-white focus:outline-none focus:border-blue-500"
-                  />
-                  <div className="grid grid-cols-3 gap-2 mb-4">
-                    <input
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      placeholder="City"
-                      className="col-span-1 bg-slate-900/70 border border-slate-700 rounded-sm px-2 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                    />
-                    <select
-                      value={state}
-                      onChange={(e) => setState(e.target.value)}
-                      className="col-span-1 bg-slate-900/70 border border-slate-700 rounded-sm px-2 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                    >
-                      <option value="">State</option>
-                      {STATES.map((s) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                    <input
-                      value={zip}
-                      onChange={(e) => setZip(e.target.value)}
-                      placeholder="ZIP"
-                      className="col-span-1 bg-slate-900/70 border border-slate-700 rounded-sm px-2 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-                </>
-              )}
-
-              <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">About your company</label>
-              <textarea
-                value={about}
-                onChange={(e) => setAbout(e.target.value.slice(0, 500))}
-                placeholder="Briefly explain your services and what makes your company different"
-                rows={4}
-                className="w-full bg-slate-900/70 border border-slate-700 rounded-sm px-3 py-2 mb-1 text-sm text-white focus:outline-none focus:border-blue-500"
+          {profile.role === "trucker" && (
+            <div className="grid sm:grid-cols-2 gap-4">
+              <InfoRow icon={<TruckIcon size={16} />} label="Fleet Size" value={profile.fleet_size} />
+              <InfoRow icon={<Building2 size={16} />} label="Equipment" value={(profile.equipment_types || []).join(", ")} />
+              <InfoRow icon={<MapPin size={16} />} label="Lanes" value={truckerDetails?.lanes} />
+              <InfoRow icon={<FileText size={16} />} label="DOT Number" value={profile.dot_number} />
+              <InfoRow icon={<FileText size={16} />} label="MC Number" value={profile.mc_number} />
+              <InfoRow
+                icon={<Shield size={16} />}
+                label="Insurance"
+                value={
+                  profile.insurance_cargo || profile.insurance_liability
+                    ? [profile.insurance_cargo, profile.insurance_liability].filter(Boolean).join(" / ")
+                    : null
+                }
               />
-              <p className="text-xs text-gray-500 mb-4 text-right">{about.length}/500</p>
+              {truckerDetails?.bio && (
+                <div className="sm:col-span-2">
+                  <span className="text-xs uppercase tracking-wide text-steelgray">Bio</span>
+                  <p className="text-sm text-asphalt mt-1">{truckerDetails.bio}</p>
+                </div>
+              )}
+            </div>
+          )}
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-md font-semibold text-sm transition disabled:opacity-50"
-              >
-                {loading ? "Saving..." : "Finish setting up"}
-              </button>
-            </form>
+          {profile.role === "vendor" && (
+            <div className="grid sm:grid-cols-2 gap-4">
+              <InfoRow
+                icon={<Globe size={16} />}
+                label="Service Area"
+                value={SERVICE_AREA_LABELS[profile.service_area] || profile.service_area}
+              />
+              <InfoRow
+                icon={<MapPin size={16} />}
+                label="Location"
+                value={
+                  profile.remote_service
+                    ? "Nationwide / Remote"
+                    : [profile.city, profile.state, profile.zip].filter(Boolean).join(", ")
+                }
+              />
+              <InfoRow icon={<Building2 size={16} />} label="Phone" value={profile.phone} />
+              <InfoRow icon={<Globe size={16} />} label="Website" value={profile.website} />
+
+              <div className="sm:col-span-2">
+                <span className="text-xs uppercase tracking-wide text-steelgray flex items-center gap-1.5">
+                  <Briefcase size={14} /> Vendor Categories
+                </span>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {(profile.vendor_categories || []).length > 0 ? (
+                    profile.vendor_categories.map((c) => (
+                      <span key={c} className="text-xs bg-gray-100 border border-gray-300 rounded-sm px-2 py-1">
+                        {VENDOR_CATEGORY_LABELS[c] || c}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-sm text-gray-400 italic">Not provided</span>
+                  )}
+                </div>
+              </div>
+
+              {profile.vendor_details &&
+                Object.keys(profile.vendor_details).length > 0 &&
+                Object.entries(profile.vendor_details).map(([category, details]) => (
+                  <div key={category} className="sm:col-span-2 border-t border-gray-200 pt-4 mt-1">
+                    <span className="text-xs uppercase tracking-wide text-steelgray font-semibold">
+                      {VENDOR_CATEGORY_LABELS[category] || category}
+                    </span>
+                    <div className="mt-2 space-y-2">
+                      {Object.entries(details).map(([key, value]) => {
+                        if (!value || (Array.isArray(value) && value.length === 0)) return null;
+                        const label = key.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase());
+                        return (
+                          <div key={key} className="text-sm">
+                            <span className="text-gray-400">{label}:</span>{" "}
+                            <span className="text-asphalt">
+                              {Array.isArray(value) ? value.join(", ") : value}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+
+              {profile.about && (
+                <div className="sm:col-span-2 border-t border-gray-200 pt-4">
+                  <span className="text-xs uppercase tracking-wide text-steelgray">About</span>
+                  <p className="text-sm text-asphalt mt-1">{profile.about}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {profile.role === "broker" && (
+            <div className="grid sm:grid-cols-2 gap-4">
+              <InfoRow icon={<FileText size={16} />} label="DOT Number" value={profile.dot_number} />
+              <InfoRow icon={<TrendingUp size={16} />} label="Weekly Volume" value={profile.weekly_volume} />
+              <InfoRow icon={<MapPin size={16} />} label="Coverage Area" value={profile.coverage_area} />
+              <InfoRow icon={<Building2 size={16} />} label="Company Size" value={profile.company_size} />
+              <InfoRow icon={<CreditCard size={16} />} label="Typical Payment Terms" value={profile.payment_terms} />
+              <InfoRow
+                icon={<Shield size={16} />}
+                label="Insurance Requirements"
+                value={
+                  profile.insurance_cargo || profile.insurance_liability
+                    ? [profile.insurance_cargo, profile.insurance_liability].filter(Boolean).join(" / ")
+                    : null
+                }
+              />
+              <div className="sm:col-span-2">
+                <span className="text-xs uppercase tracking-wide text-steelgray">Equipment Needed</span>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {(profile.equipment_needed || []).length > 0 ? (
+                    profile.equipment_needed.map((s) => (
+                      <span key={s} className="text-xs bg-gray-100 border border-gray-300 rounded-sm px-2 py-1">
+                        {s}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-sm text-gray-400 italic">Not provided</span>
+                  )}
+                </div>
+              </div>
+              <div className="sm:col-span-2">
+                <span className="text-xs uppercase tracking-wide text-steelgray">Services Offered</span>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {(profile.services_offered || []).length > 0 ? (
+                    profile.services_offered.map((s) => (
+                      <span key={s} className="text-xs bg-gray-100 border border-gray-300 rounded-sm px-2 py-1">
+                        {s}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-sm text-gray-400 italic">Not provided</span>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function InfoRow({ icon, label, value }) {
+  return (
+    <div className="flex items-start gap-2">
+      <span className="text-steelgray mt-0.5">{icon}</span>
+      <div>
+        <div className="text-xs uppercase tracking-wide text-steelgray">{label}</div>
+        <div className="text-sm text-asphalt">{value || "Not provided"}</div>
       </div>
     </div>
   );
