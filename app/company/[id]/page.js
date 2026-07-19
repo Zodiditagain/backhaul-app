@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Building2, Truck as TruckIcon, MapPin, FileText, TrendingUp, CreditCard, Shield, Briefcase, Globe } from "lucide-react";
-import { supabase } from "../../lib/supabaseClient";
+import { supabase } from "../../../lib/supabaseClient";
 
 export default function CompanyProfile({ params }) {
   const router = useRouter();
