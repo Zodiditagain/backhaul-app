@@ -27,7 +27,17 @@ export default function TruckerDashboard({ user }) {
   const searchParams = useSearchParams();
   const [profile, setProfile] = useState(null);
   const [details, setDetails] = useState(null);
-  const [form, setForm] = useState({ lanes: "", bio: "", fleetSize: "1-5", equipment: [] });
+  const [form, setForm] = useState({
+    lanes: "",
+    bio: "",
+    fleetSize: "1-5",
+    equipment: [],
+    dotNumber: "",
+    mcNumber: "",
+    insuranceCargo: "",
+    insuranceLiability: "",
+    yearsActive: "",
+  });
   const [matches, setMatches] = useState([]);
   const [lastMessages, setLastMessages] = useState({});
   const [reviews, setReviews] = useState([]);
@@ -38,7 +48,7 @@ export default function TruckerDashboard({ user }) {
   async function loadEverything() {
     const { data: profileData } = await supabase
       .from("profiles")
-      .select("equipment_types, fleet_size, operator_type, company_name")
+      .select("equipment_types, fleet_size, operator_type, company_name, dot_number, mc_number, insurance_cargo, insurance_liability")
       .eq("id", user.id)
       .single();
     setProfile(profileData);
@@ -57,6 +67,11 @@ export default function TruckerDashboard({ user }) {
       bio: detailsData?.bio || "",
       fleetSize: profileData?.fleet_size || "1-5",
       equipment: profileData?.equipment_types || [],
+      dotNumber: profileData?.dot_number || "",
+      mcNumber: profileData?.mc_number || "",
+      insuranceCargo: profileData?.insurance_cargo || "",
+      insuranceLiability: profileData?.insurance_liability || "",
+      yearsActive: detailsData?.years_active ?? "",
     });
 
     const { data: matchData } = await supabase
@@ -126,6 +141,10 @@ export default function TruckerDashboard({ user }) {
       .update({
         fleet_size: form.fleetSize,
         equipment_types: form.equipment,
+        dot_number: form.dotNumber || null,
+        mc_number: form.mcNumber || null,
+        insurance_cargo: form.insuranceCargo || null,
+        insurance_liability: form.insuranceLiability || null,
       })
       .eq("id", user.id);
 
@@ -135,7 +154,7 @@ export default function TruckerDashboard({ user }) {
       equipment: form.equipment.join(", "),
       lanes: form.lanes,
       bio: form.bio,
-      years_active: details?.years_active || 0,
+      years_active: form.yearsActive === "" ? 0 : Number(form.yearsActive),
     };
     const { error } = details
       ? await supabase.from("trucker_details").update(payload).eq("id", user.id)
@@ -282,6 +301,30 @@ export default function TruckerDashboard({ user }) {
               </select>
             </div>
             <Field label="Lanes you run" value={form.lanes} onChange={(v) => setForm({ ...form, lanes: v })} placeholder="CA, WA, OR" />
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-3 mb-3">
+            <Field label="DOT Number" value={form.dotNumber} onChange={(v) => setForm({ ...form, dotNumber: v })} placeholder="e.g. 1234567" />
+            <Field label="MC Number" value={form.mcNumber} onChange={(v) => setForm({ ...form, mcNumber: v })} placeholder="e.g. MC-123456" />
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-3 mb-3">
+            <Field label="Insurance — Cargo" value={form.insuranceCargo} onChange={(v) => setForm({ ...form, insuranceCargo: v })} placeholder="e.g. $100K Cargo" />
+            <Field label="Insurance — Liability" value={form.insuranceLiability} onChange={(v) => setForm({ ...form, insuranceLiability: v })} placeholder="e.g. $1M Liability" />
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="block text-xs uppercase tracking-wide text-steelgray mb-1">Years Active</label>
+              <input
+                type="number"
+                min="0"
+                value={form.yearsActive}
+                onChange={(e) => setForm({ ...form, yearsActive: e.target.value })}
+                placeholder="e.g. 8"
+                className="w-full border border-gray-300 rounded-sm px-3 py-2 text-sm"
+              />
+            </div>
           </div>
 
           <div className="mb-3">
