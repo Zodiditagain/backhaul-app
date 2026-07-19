@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { MapPin, X, Handshake, MessageCircle, Truck, Clock } from "lucide-react";
+import { MapPin, X, Handshake, MessageCircle, Truck, Clock, AlertTriangle } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import GradeBadge, { computeStats } from "./GradeBadge";
 import MatchThread from "./MatchThread";
@@ -11,6 +11,7 @@ import MatchThread from "./MatchThread";
 export default function MatchmakingDashboard({ user, role }) {
   const searchParams = useSearchParams();
   const [companyName, setCompanyName] = useState("");
+  const [onboardingCompleted, setOnboardingCompleted] = useState(true);
   const [candidates, setCandidates] = useState([]);
   const [deckIndex, setDeckIndex] = useState(0);
   const [matches, setMatches] = useState([]);
@@ -21,10 +22,11 @@ export default function MatchmakingDashboard({ user, role }) {
   async function loadEverything() {
     const { data: profileData } = await supabase
       .from("profiles")
-      .select("company_name")
+      .select("company_name, onboarding_completed")
       .eq("id", user.id)
       .single();
     setCompanyName(profileData?.company_name || "");
+    setOnboardingCompleted(Boolean(profileData?.onboarding_completed));
 
     const { data: matchData } = await supabase
       .from("matches")
@@ -110,6 +112,24 @@ export default function MatchmakingDashboard({ user, role }) {
           }}
         />
       </div>
+
+      {!onboardingCompleted && (
+        <div className="bg-amberx/10 border border-amberx/40 rounded-sm px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle size={18} className="text-amberx shrink-0" />
+            <p className="text-sm text-asphalt">
+              <span className="font-semibold">Your profile is incomplete.</span>{" "}
+              Carriers can't see your services, coverage area, or company details yet.
+            </p>
+          </div>
+          <Link
+            href="/onboarding-partner"
+            className="shrink-0 bg-asphalt hover:bg-black text-white text-xs font-mono uppercase tracking-wide px-3 py-2 rounded-sm transition-colors whitespace-nowrap"
+          >
+            Complete profile
+          </Link>
+        </div>
+      )}
 
       <div className="grid md:grid-cols-[minmax(0,1fr)_320px] gap-6">
         <section>
