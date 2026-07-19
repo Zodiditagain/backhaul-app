@@ -29,6 +29,7 @@ export default function TruckerDashboard({ user }) {
   const [details, setDetails] = useState(null);
   const [form, setForm] = useState({ lanes: "", bio: "", fleetSize: "1-5", equipment: [] });
   const [matches, setMatches] = useState([]);
+  const [lastMessages, setLastMessages] = useState({});
   const [reviews, setReviews] = useState([]);
   const [activeMatch, setActiveMatch] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -65,10 +66,26 @@ export default function TruckerDashboard({ user }) {
       .order("created_at", { ascending: false });
     setMatches(matchData || []);
 
+    const acceptedIds = (matchData || []).filter((m) => m.status === "accepted").map((m) => m.id);
+    if (acceptedIds.length > 0) {
+      const { data: msgData } = await supabase
+        .from("messages")
+        .select("match_id, sender_id, text, rate, created_at")
+        .in("match_id", acceptedIds)
+        .order("created_at", { ascending: false });
+      const latestByMatch = {};
+      (msgData || []).forEach((m) => {
+        if (!latestByMatch[m.match_id]) latestByMatch[m.match_id] = m;
+      });
+      setLastMessages(latestByMatch);
+    } else {
+      setLastMessages({});
+    }
+
     const openMatchId = searchParams.get("openMatch");
     if (openMatchId) {
       const found = (matchData || []).find((m) => m.id === openMatchId);
-      if (found) setActiveMatch(found);
+      if (found) openConversation(found);
     }
 
     const { data: reviewData } = await supabase
@@ -84,6 +101,12 @@ export default function TruckerDashboard({ user }) {
     loadEverything();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function openConversation(m) {
+    setActiveMatch(m);
+    await supabase.from("matches").update({ trucker_last_read_at: new Date().toISOString() }).eq("id", m.id);
+    setMatches((prev) => prev.map((x) => (x.id === m.id ? { ...x, trucker_last_read_at: new Date().toISOString() } : x)));
+  }
 
   function toggleEquipment(id) {
     setForm((prev) => ({
@@ -129,6 +152,14 @@ export default function TruckerDashboard({ user }) {
       await supabase.from("matches").delete().eq("id", matchId);
     }
     loadEverything();
+  }
+
+  function isUnread(m) {
+    const lastMsg = lastMessages[m.id];
+    if (!lastMsg) return false;
+    if (lastMsg.sender_id === user.id) return false;
+    if (!m.trucker_last_read_at) return true;
+    return new Date(lastMsg.created_at) > new Date(m.trucker_last_read_at);
   }
 
   const acceptedMatches = matches.filter((m) => m.status === "accepted");
@@ -282,38 +313,50 @@ export default function TruckerDashboard({ user }) {
         <section>
           <h2 className="text-xl font-bold text-asphalt border-b border-gray-300 pb-2">Companies interested in you</h2>
           <div className="space-y-2 mt-3">
-            {acceptedMatches.map((m) => (
-              <div
-                key={m.id}
-                className={`w-full bg-white border rounded-sm px-4 py-3 flex items-center justify-between transition-colors ${
-                  activeMatch?.id === m.id
-                    ? "border-amberx border-l-4"
-                    : "border-gray-300 border-l-4 border-l-transparent hover:border-l-amberx/60"
-                }`}
-              >
-                <button onClick={() => setActiveMatch(m)} className="flex items-center gap-3 text-left flex-1">
-                  <div className="w-8 h-8 rotate-45 bg-asphalt/5 border border-asphalt/10 flex items-center justify-center shrink-0">
-                    {m.partner_role === "vendor" ? (
-                      <Fuel size={14} className="-rotate-45 text-steelgray" />
-                    ) : (
-                      <Handshake size={14} className="-rotate-45 text-steelgray" />
-                    )}
-                  </div>
-                  <div>
-                    <div className="text-sm font-medium">{m.partner?.company_name}</div>
-                    <div className="text-xs text-gray-400 font-mono uppercase tracking-wide">{m.partner_role}</div>
-                  </div>
-                </button>
-                <div className="flex items-center gap-3 shrink-0">
-                  <Link href={`/company/${m.partner_id}`} className="text-xs text-steelgray hover:text-amberx underline whitespace-nowrap">
-                    View Profile
-                  </Link>
-                  <button onClick={() => setActiveMatch(m)}>
-                    <MessageCircle size={15} className="text-gray-400" />
+            {acceptedMatches.map((m) => {
+              const lastMsg = lastMessages[m.id];
+              const unread = isUnread(m);
+              return (
+                <div
+                  key={m.id}
+                  className={`w-full bg-white border rounded-sm px-4 py-3 flex items-center justify-between transition-colors ${
+                    activeMatch?.id === m.id
+                      ? "border-amberx border-l-4"
+                      : "border-gray-300 border-l-4 border-l-transparent hover:border-l-amberx/60"
+                  }`}
+                >
+                  <button onClick={() => openConversation(m)} className="flex items-center gap-3 text-left flex-1 min-w-0">
+                    <div className="w-8 h-8 rotate-45 bg-asphalt/5 border border-asphalt/10 flex items-center justify-center shrink-0">
+                      {m.partner_role === "vendor" ? (
+                        <Fuel size={14} className="-rotate-45 text-steelgray" />
+                      ) : (
+                        <Handshake size={14} className="-rotate-45 text-steelgray" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-sm ${unread ? "font-bold" : "font-medium"}`}>{m.partner?.company_name}</span>
+                        {unread && <span className="w-2 h-2 rounded-full bg-amberx shrink-0" />}
+                      </div>
+                      <div className="text-xs text-gray-400 font-mono uppercase tracking-wide">{m.partner_role} • Connection</div>
+                      {lastMsg && (
+                        <div className={`text-xs truncate mt-0.5 ${unread ? "text-asphalt font-medium" : "text-gray-400"}`}>
+                          {lastMsg.text || (lastMsg.rate ? `Offer: $${lastMsg.rate}/mi` : "")}
+                        </div>
+                      )}
+                    </div>
                   </button>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <Link href={`/company/${m.partner_id}`} className="text-xs text-steelgray hover:text-amberx underline whitespace-nowrap">
+                      View Profile
+                    </Link>
+                    <button onClick={() => openConversation(m)}>
+                      <MessageCircle size={15} className={unread ? "text-amberx" : "text-gray-400"} />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {acceptedMatches.length === 0 && <p className="text-sm text-steelgray italic py-4">No matches yet.</p>}
           </div>
         </section>
@@ -321,7 +364,7 @@ export default function TruckerDashboard({ user }) {
           <h2 className="text-xl font-bold text-asphalt border-b border-gray-300 pb-2">Conversation</h2>
           <div className="mt-3">
             {activeMatch ? (
-              <MatchThread match={activeMatch} user={user} role="trucker" />
+              <MatchThread match={activeMatch} user={user} role="trucker" onMessageSent={loadEverything} />
             ) : (
               <p className="text-sm text-steelgray italic py-4">Select a conversation to negotiate.</p>
             )}
