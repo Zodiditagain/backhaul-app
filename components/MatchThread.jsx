@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Send, Star, CheckCircle2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 
-export default function MatchThread({ match, user, role, onReviewSubmitted }) {
+export default function MatchThread({ match, user, role, onReviewSubmitted, onMessageSent }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [rate, setRate] = useState("");
@@ -53,6 +53,7 @@ export default function MatchThread({ match, user, role, onReviewSubmitted }) {
       setText("");
       setRate("");
       loadMessages();
+      if (onMessageSent) onMessageSent();
     }
   }
 
