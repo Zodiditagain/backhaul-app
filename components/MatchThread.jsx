@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Send, Star } from "lucide-react";
+import { Send, Star, CheckCircle2 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 
 export default function MatchThread({ match, user, role, onReviewSubmitted }) {
@@ -12,6 +12,7 @@ export default function MatchThread({ match, user, role, onReviewSubmitted }) {
   const [onTime, setOnTime] = useState(null);
   const [condition, setCondition] = useState(0);
   const [submitted, setSubmitted] = useState(false);
+  const [truckerDetails, setTruckerDetails] = useState(null);
 
   async function loadMessages() {
     const { data } = await supabase
@@ -22,8 +23,19 @@ export default function MatchThread({ match, user, role, onReviewSubmitted }) {
     setMessages(data || []);
   }
 
+  async function loadTruckerDetails() {
+    if (!match.trucker_id) return;
+    const { data } = await supabase
+      .from("trucker_details")
+      .select("lanes, equipment, fleet_size")
+      .eq("id", match.trucker_id)
+      .maybeSingle();
+    setTruckerDetails(data || null);
+  }
+
   useEffect(() => {
     loadMessages();
+    loadTruckerDetails();
     setSubmitted(false);
     setShowReview(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -61,6 +73,7 @@ export default function MatchThread({ match, user, role, onReviewSubmitted }) {
 
   const canReview = role !== "trucker";
   const partnerName = match.trucker?.company_name || match.partner?.company_name || "Conversation";
+  const isAccepted = match.status === "accepted";
 
   return (
     <div className="bg-white border border-gray-300 rounded-sm flex flex-col h-[420px]">
@@ -99,7 +112,35 @@ export default function MatchThread({ match, user, role, onReviewSubmitted }) {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {isAccepted && (
+          <div className="bg-highway/10 border border-highway/30 rounded-sm px-3 py-2.5 flex items-start gap-2">
+            <CheckCircle2 size={16} className="text-highway shrink-0 mt-0.5" />
+            <p className="text-xs text-steelgray">
+              <span className="font-semibold text-highway">Connection accepted.</span> You can now message each other.
+            </p>
+          </div>
+        )}
+
+        {truckerDetails && (truckerDetails.lanes || truckerDetails.equipment || truckerDetails.fleet_size) && (
+          <div className="bg-gray-50 border border-gray-200 rounded-sm px-3 py-2.5">
+            <p className="text-[10px] uppercase tracking-widest text-gray-400 font-mono mb-1.5">
+              {role === "trucker" ? "Your details for this connection" : "Carrier details"}
+            </p>
+            <div className="grid grid-cols-1 gap-1 text-xs text-steelgray">
+              {truckerDetails.lanes && (
+                <div><span className="text-gray-400">Lanes:</span> {truckerDetails.lanes}</div>
+              )}
+              {truckerDetails.equipment && (
+                <div><span className="text-gray-400">Equipment:</span> {truckerDetails.equipment}</div>
+              )}
+              {truckerDetails.fleet_size && (
+                <div><span className="text-gray-400">Fleet:</span> {truckerDetails.fleet_size} trucks</div>
+              )}
+            </div>
+          </div>
+        )}
+
         {messages.length === 0 && <p className="text-sm text-gray-400 italic">No messages yet — open with a lane and a number.</p>}
         {messages.map((m) => (
           <div
