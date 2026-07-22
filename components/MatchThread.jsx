@@ -520,8 +520,7 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
                   <button
                     onClick={acceptBol}
                     disabled={saving}
-                    className="flex-1 bg-highway text-white py-2.5 rounded-sm font-mono text-xs uppercase tracking-wide hover:bg-green-800 disabled:opacity-50"
-                  >
+                   className="flex-1 bg-green-600 text-white py-2.5 rounded-sm font-mono text-xs uppercase tracking-wide hover:bg-green-800 disabled:opacity-50"                  >
                     {saving ? "Saving..." : "Accept BOL"}
                   </button>
                   <button
