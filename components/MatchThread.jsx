@@ -808,7 +808,7 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
               <h3 className="text-sm font-bold uppercase tracking-wide text-asphalt mb-3">Proof of Delivery</h3>
 
               {podUrl && (
-                
+               <a 
                   href={podUrl}
                   target="_blank"
                   rel="noopener noreferrer"
