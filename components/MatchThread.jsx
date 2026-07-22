@@ -479,7 +479,8 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
           {canAct && (
             <div className="border-t-2 border-amberx pt-4">
               <h3 className="text-sm font-bold uppercase tracking-wide text-asphalt mb-1">Your Information</h3>
-              <p className="text-xs text-gray-400 mb-3">Enter your driver and equipment details, then accept — or request a correction if something's wrong.</p>
+              <p className="text-xs text-gray-400 mb-1">Enter your driver and equipment details, then accept — or request a correction if something's wrong.</p>
+              <p className="text-xs text-amberx font-semibold mb-3">Your information is saved only when you click Accept BOL.</p>
               <div className="grid sm:grid-cols-2 gap-3 mb-4">
                 <ActField label="Driver Name *" value={driverName} onChange={setDriverName} />
                 <ActField label="Driver Phone" value={driverPhone} onChange={setDriverPhone} />
