@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Send, Star, CheckCircle2, FileText, X } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { Send, Star, CheckCircle2, FileText, X, Upload, Camera, Paperclip } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import BolForm from "./BolForm";
 
@@ -231,6 +231,11 @@ export default function MatchThread({ match, user, role, onReviewSubmitted, onMe
               <div className={`font-mono uppercase tracking-wide font-semibold ${STATUS_COLORS[bol.status] || "text-gray-400"}`}>
                 Status: {STATUS_LABELS[bol.status] || bol.status}
               </div>
+              {bol.pod_url && (
+                <div className="flex items-center gap-1 text-highway">
+                  <Paperclip size={11} /> POD attached
+                </div>
+              )}
               {bol.status === "correction_requested" && bol.correction_note && (
                 <div className="bg-alertred/10 border border-alertred/30 rounded-sm px-2 py-1.5 mt-1">
                   <span className="text-alertred font-semibold">Correction requested:</span> {bol.correction_note}
@@ -351,11 +356,18 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
   const [deliveryCondition, setDeliveryCondition] = useState("");
   const [deliveryPieces, setDeliveryPieces] = useState("");
 
+  const [podUrl, setPodUrl] = useState(bol.pod_url || "");
+  const [podUploadedAt, setPodUploadedAt] = useState(bol.pod_uploaded_at || "");
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+
   const isTrucker = role === "trucker";
   const isBroker = role === "broker";
   const canAct = isTrucker && bol.status === "sent";
   const canUpdateStatus = isTrucker && ["accepted", "ready_for_pickup", "signed_at_pickup", "in_transit", "delivered"].includes(bol.status);
   const canComplete = isBroker && bol.status === "receiver_signed";
+  const canUploadPod = isTrucker && ["delivered", "receiver_signed", "completed"].includes(bol.status);
 
   useEffect(() => {
     async function loadItems() {
@@ -485,6 +497,54 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
       { status: "completed" },
       `🎉 BOL ${bol.bol_number} marked completed.`
     );
+  }
+
+  async function handleFileSelected(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError("");
+    setUploading(true);
+
+    const ext = file.name.split(".").pop();
+    const path = `bols/${bol.id}/${Date.now()}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage.from("documents").upload(path, file);
+    if (uploadError) {
+      setError(uploadError.message);
+      setUploading(false);
+      return;
+    }
+
+    const { data: urlData } = supabase.storage.from("documents").getPublicUrl(path);
+    const nowIso = new Date().toISOString();
+
+    const { error: updateError } = await supabase
+      .from("bols")
+      .update({
+        pod_url: urlData.publicUrl,
+        pod_uploaded_at: nowIso,
+        pod_uploaded_by: user.id,
+        updated_at: nowIso,
+      })
+      .eq("id", bol.id);
+
+    if (updateError) {
+      setError(updateError.message);
+      setUploading(false);
+      return;
+    }
+
+    await supabase.from("messages").insert({
+      match_id: match.id,
+      sender_id: user.id,
+      text: `📎 Signed BOL / POD uploaded for ${bol.bol_number}.`,
+    });
+
+    setPodUrl(urlData.publicUrl);
+    setPodUploadedAt(nowIso);
+    setUploading(false);
+    onUpdated();
+    e.target.value = "";
   }
 
   return (
@@ -740,6 +800,61 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
               >
                 {saving ? "Saving..." : "Mark Completed"}
               </button>
+            </div>
+          )}
+
+          {(podUrl || canUploadPod) && (
+            <div className="border-t-2 border-gray-300 pt-4">
+              <h3 className="text-sm font-bold uppercase tracking-wide text-asphalt mb-3">Proof of Delivery</h3>
+
+              {podUrl && (
+                
+                  href={podUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm text-blue-600 underline mb-3"
+                >
+                  <Paperclip size={14} /> View uploaded POD
+                  {podUploadedAt && (
+                    <span className="text-xs text-gray-400 no-underline">
+                      — {new Date(podUploadedAt).toLocaleString()}
+                    </span>
+                  )}
+                </a>
+              )}
+
+              {canUploadPod && (
+                <div className="flex gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={handleFileSelected}
+                  />
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={handleFileSelected}
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="flex-1 flex items-center justify-center gap-1.5 border border-gray-300 hover:border-asphalt text-asphalt py-2.5 rounded-sm font-mono text-xs uppercase tracking-wide disabled:opacity-50"
+                  >
+                    <Upload size={14} /> {uploading ? "Uploading..." : "Upload Signed BOL / POD"}
+                  </button>
+                  <button
+                    onClick={() => cameraInputRef.current?.click()}
+                    disabled={uploading}
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-asphalt text-white py-2.5 rounded-sm font-mono text-xs uppercase tracking-wide hover:bg-black disabled:opacity-50"
+                  >
+                    <Camera size={14} /> {uploading ? "Uploading..." : "Take Photo"}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
