@@ -10,6 +10,12 @@ const STATUS_LABELS = {
   sent: "Carrier Action Required",
   correction_requested: "Correction Requested",
   accepted: "Carrier Accepted",
+  ready_for_pickup: "Ready for Pickup",
+  signed_at_pickup: "Signed at Pickup",
+  in_transit: "In Transit",
+  delivered: "Delivered",
+  receiver_signed: "Receiver Signed",
+  completed: "Completed",
 };
 
 const STATUS_COLORS = {
@@ -17,6 +23,12 @@ const STATUS_COLORS = {
   sent: "text-amberx",
   correction_requested: "text-alertred",
   accepted: "text-highway",
+  ready_for_pickup: "text-blue-600",
+  signed_at_pickup: "text-blue-600",
+  in_transit: "text-amberx",
+  delivered: "text-blue-600",
+  receiver_signed: "text-highway",
+  completed: "text-highway",
 };
 
 export default function MatchThread({ match, user, role, onReviewSubmitted, onMessageSent }) {
@@ -116,6 +128,8 @@ export default function MatchThread({ match, user, role, onReviewSubmitted, onMe
   const partnerName = match.trucker?.company_name || match.partner?.company_name || "Conversation";
   const isAccepted = match.status === "accepted";
   const visibleBols = isTrucker ? bols.filter((b) => b.status !== "draft") : bols;
+
+  const truckerActionStatuses = ["accepted", "ready_for_pickup", "signed_at_pickup", "in_transit", "delivered"];
 
   return (
     <div className="bg-white border border-gray-300 rounded-sm flex flex-col h-[480px]">
@@ -246,6 +260,22 @@ export default function MatchThread({ match, user, role, onReviewSubmitted, onMe
                   Complete Information
                 </button>
               )}
+              {isTrucker && truckerActionStatuses.includes(bol.status) && (
+                <button
+                  onClick={() => setViewingBol(bol)}
+                  className="text-[11px] uppercase tracking-wide bg-blue-600 text-white rounded-sm px-2.5 py-1.5 hover:bg-blue-800"
+                >
+                  Update Status
+                </button>
+              )}
+              {isBroker && bol.status === "receiver_signed" && (
+                <button
+                  onClick={() => setViewingBol(bol)}
+                  className="text-[11px] uppercase tracking-wide bg-green-600 text-white rounded-sm px-2.5 py-1.5 hover:bg-green-800"
+                >
+                  Mark Completed
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -312,8 +342,20 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const [shipperSigName, setShipperSigName] = useState("");
+  const [driverSigName, setDriverSigName] = useState("");
+  const [pickupCondition, setPickupCondition] = useState("");
+  const [pickupPieces, setPickupPieces] = useState("");
+
+  const [receiverSigName, setReceiverSigName] = useState("");
+  const [deliveryCondition, setDeliveryCondition] = useState("");
+  const [deliveryPieces, setDeliveryPieces] = useState("");
+
   const isTrucker = role === "trucker";
+  const isBroker = role === "broker";
   const canAct = isTrucker && bol.status === "sent";
+  const canUpdateStatus = isTrucker && ["accepted", "ready_for_pickup", "signed_at_pickup", "in_transit", "delivered"].includes(bol.status);
+  const canComplete = isBroker && bol.status === "receiver_signed";
 
   useEffect(() => {
     async function loadItems() {
@@ -327,31 +369,21 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
     loadItems();
   }, [bol.id]);
 
-  async function acceptBol() {
+  async function updateBol(fields, messageText) {
     setError("");
-    if (!driverName) {
-      setError("Enter the assigned driver's name before accepting.");
-      return;
-    }
     setSaving(true);
     const { error: updateError } = await supabase
       .from("bols")
-      .update({
-        driver_name: driverName,
-        driver_phone: driverPhone || null,
-        truck_number: truckNumber || null,
-        trailer_number: trailerNumber || null,
-        seal_number: sealNumber || null,
-        status: "accepted",
-        updated_at: new Date().toISOString(),
-      })
+      .update({ ...fields, updated_at: new Date().toISOString() })
       .eq("id", bol.id);
     if (!updateError) {
-      await supabase.from("messages").insert({
-        match_id: match.id,
-        sender_id: user.id,
-        text: `✅ BOL ${bol.bol_number} accepted. Driver: ${driverName}.`,
-      });
+      if (messageText) {
+        await supabase.from("messages").insert({
+          match_id: match.id,
+          sender_id: user.id,
+          text: messageText,
+        });
+      }
       onUpdated();
       onClose();
     } else {
@@ -360,33 +392,99 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
     setSaving(false);
   }
 
+  async function acceptBol() {
+    if (!driverName) {
+      setError("Enter the assigned driver's name before accepting.");
+      return;
+    }
+    await updateBol(
+      {
+        driver_name: driverName,
+        driver_phone: driverPhone || null,
+        truck_number: truckNumber || null,
+        trailer_number: trailerNumber || null,
+        seal_number: sealNumber || null,
+        status: "accepted",
+      },
+      `✅ BOL ${bol.bol_number} accepted. Driver: ${driverName}.`
+    );
+  }
+
   async function requestCorrection() {
-    setError("");
     if (!correctionNote) {
       setError("Describe what needs to be corrected.");
       return;
     }
-    setSaving(true);
-    const { error: updateError } = await supabase
-      .from("bols")
-      .update({
-        status: "correction_requested",
-        correction_note: correctionNote,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", bol.id);
-    if (!updateError) {
-      await supabase.from("messages").insert({
-        match_id: match.id,
-        sender_id: user.id,
-        text: `⚠️ Correction requested for BOL ${bol.bol_number}: ${correctionNote}`,
-      });
-      onUpdated();
-      onClose();
-    } else {
-      setError(updateError.message);
+    await updateBol(
+      { status: "correction_requested", correction_note: correctionNote },
+      `⚠️ Correction requested for BOL ${bol.bol_number}: ${correctionNote}`
+    );
+  }
+
+  async function markReadyForPickup() {
+    await updateBol(
+      { status: "ready_for_pickup" },
+      `🚚 BOL ${bol.bol_number} marked ready for pickup.`
+    );
+  }
+
+  async function signAtPickup() {
+    if (!driverSigName) {
+      setError("Driver signature name is required.");
+      return;
     }
-    setSaving(false);
+    const now = new Date().toISOString();
+    await updateBol(
+      {
+        status: "signed_at_pickup",
+        driver_signature_name: driverSigName,
+        driver_signature_at: now,
+        shipper_signature_name: shipperSigName || null,
+        shipper_signature_at: shipperSigName ? now : null,
+        pickup_condition: pickupCondition || null,
+        pickup_pieces_count: pickupPieces || null,
+        picked_up_at: now,
+      },
+      `✍️ BOL ${bol.bol_number} signed at pickup by ${driverSigName}.`
+    );
+  }
+
+  async function markInTransit() {
+    await updateBol(
+      { status: "in_transit" },
+      `🛣️ BOL ${bol.bol_number} is now in transit.`
+    );
+  }
+
+  async function markDelivered() {
+    await updateBol(
+      { status: "delivered", delivered_at: new Date().toISOString() },
+      `📦 BOL ${bol.bol_number} marked delivered.`
+    );
+  }
+
+  async function captureReceiverSignature() {
+    if (!receiverSigName) {
+      setError("Receiver signature name is required.");
+      return;
+    }
+    await updateBol(
+      {
+        status: "receiver_signed",
+        receiver_signature_name: receiverSigName,
+        receiver_signature_at: new Date().toISOString(),
+        delivery_condition: deliveryCondition || null,
+        delivery_pieces_count: deliveryPieces || null,
+      },
+      `✍️ Receiver signature captured for BOL ${bol.bol_number} (${receiverSigName}).`
+    );
+  }
+
+  async function markCompleted() {
+    await updateBol(
+      { status: "completed" },
+      `🎉 BOL ${bol.bol_number} marked completed.`
+    );
   }
 
   return (
@@ -404,6 +502,10 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5 text-sm">
           {error && <p className="text-alertred text-sm bg-alertred/10 border border-alertred/30 rounded-sm px-3 py-2">{error}</p>}
+
+          <div className={`font-mono uppercase tracking-wide font-semibold text-sm ${STATUS_COLORS[bol.status] || "text-gray-400"}`}>
+            Status: {STATUS_LABELS[bol.status] || bol.status}
+          </div>
 
           <ViewSection title="Shipment">
             <ViewRow label="BOL Number" value={bol.bol_number} />
@@ -435,15 +537,30 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
             <ViewRow label="USDOT" value={bol.carrier_dot} />
             <ViewRow label="MC" value={bol.carrier_mc} />
             <ViewRow label="Equipment" value={bol.equipment_type} />
-            {!canAct && (
-              <>
-                <ViewRow label="Driver" value={bol.driver_name} />
-                <ViewRow label="Driver Phone" value={bol.driver_phone} />
-                <ViewRow label="Truck #" value={bol.truck_number} />
-                <ViewRow label="Trailer #" value={bol.trailer_number} />
-              </>
-            )}
+            <ViewRow label="Driver" value={bol.driver_name} />
+            <ViewRow label="Driver Phone" value={bol.driver_phone} />
+            <ViewRow label="Truck #" value={bol.truck_number} />
+            <ViewRow label="Trailer #" value={bol.trailer_number} />
           </ViewSection>
+
+          {(bol.driver_signature_name || bol.shipper_signature_name) && (
+            <ViewSection title="Pickup Record">
+              <ViewRow label="Driver Signature" value={bol.driver_signature_name} />
+              <ViewRow label="Signed At" value={bol.driver_signature_at ? new Date(bol.driver_signature_at).toLocaleString() : null} />
+              <ViewRow label="Shipper Signature" value={bol.shipper_signature_name} />
+              <ViewRow label="Pickup Condition" value={bol.pickup_condition} />
+              <ViewRow label="Pieces Picked Up" value={bol.pickup_pieces_count} />
+            </ViewSection>
+          )}
+
+          {bol.receiver_signature_name && (
+            <ViewSection title="Delivery Record">
+              <ViewRow label="Receiver Signature" value={bol.receiver_signature_name} />
+              <ViewRow label="Signed At" value={bol.receiver_signature_at ? new Date(bol.receiver_signature_at).toLocaleString() : null} />
+              <ViewRow label="Delivery Condition" value={bol.delivery_condition} />
+              <ViewRow label="Pieces Delivered" value={bol.delivery_pieces_count} />
+            </ViewSection>
+          )}
 
           {items.length > 0 && (
             <ViewSection title="Freight">
@@ -520,7 +637,8 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
                   <button
                     onClick={acceptBol}
                     disabled={saving}
-                   className="flex-1 bg-green-600 text-white py-2.5 rounded-sm font-mono text-xs uppercase tracking-wide hover:bg-green-800 disabled:opacity-50"                  >
+                    className="flex-1 bg-green-600 text-white py-2.5 rounded-sm font-mono text-xs uppercase tracking-wide hover:bg-green-800 disabled:opacity-50"
+                  >
                     {saving ? "Saving..." : "Accept BOL"}
                   </button>
                   <button
@@ -531,6 +649,97 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
                   </button>
                 </div>
               )}
+            </div>
+          )}
+
+          {canUpdateStatus && bol.status === "accepted" && (
+            <div className="border-t-2 border-blue-600 pt-4">
+              <h3 className="text-sm font-bold uppercase tracking-wide text-asphalt mb-3">Next Step</h3>
+              <button
+                onClick={markReadyForPickup}
+                disabled={saving}
+                className="w-full bg-blue-600 text-white py-2.5 rounded-sm font-mono text-xs uppercase tracking-wide hover:bg-blue-800 disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Mark Ready for Pickup"}
+              </button>
+            </div>
+          )}
+
+          {canUpdateStatus && bol.status === "ready_for_pickup" && (
+            <div className="border-t-2 border-blue-600 pt-4">
+              <h3 className="text-sm font-bold uppercase tracking-wide text-asphalt mb-1">Confirm Pickup</h3>
+              <p className="text-xs text-gray-400 mb-3">Sign to confirm freight has been picked up from the shipper.</p>
+              <div className="grid sm:grid-cols-2 gap-3 mb-3">
+                <ActField label="Driver Signature (Print Name) *" value={driverSigName} onChange={setDriverSigName} />
+                <ActField label="Shipper Signature (Print Name)" value={shipperSigName} onChange={setShipperSigName} />
+                <ActField label="Pickup Condition" value={pickupCondition} onChange={setPickupCondition} />
+                <ActField label="Pieces Picked Up" value={pickupPieces} onChange={setPickupPieces} />
+              </div>
+              <button
+                onClick={signAtPickup}
+                disabled={saving}
+                className="w-full bg-blue-600 text-white py-2.5 rounded-sm font-mono text-xs uppercase tracking-wide hover:bg-blue-800 disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Sign & Confirm Pickup"}
+              </button>
+            </div>
+          )}
+
+          {canUpdateStatus && bol.status === "signed_at_pickup" && (
+            <div className="border-t-2 border-blue-600 pt-4">
+              <h3 className="text-sm font-bold uppercase tracking-wide text-asphalt mb-3">Next Step</h3>
+              <button
+                onClick={markInTransit}
+                disabled={saving}
+                className="w-full bg-amberx text-asphalt py-2.5 rounded-sm font-mono text-xs uppercase tracking-wide hover:bg-yellow-600 disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Mark In Transit"}
+              </button>
+            </div>
+          )}
+
+          {canUpdateStatus && bol.status === "in_transit" && (
+            <div className="border-t-2 border-blue-600 pt-4">
+              <h3 className="text-sm font-bold uppercase tracking-wide text-asphalt mb-3">Next Step</h3>
+              <button
+                onClick={markDelivered}
+                disabled={saving}
+                className="w-full bg-blue-600 text-white py-2.5 rounded-sm font-mono text-xs uppercase tracking-wide hover:bg-blue-800 disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Mark Delivered"}
+              </button>
+            </div>
+          )}
+
+          {canUpdateStatus && bol.status === "delivered" && (
+            <div className="border-t-2 border-highway pt-4">
+              <h3 className="text-sm font-bold uppercase tracking-wide text-asphalt mb-1">Capture Proof of Delivery</h3>
+              <p className="text-xs text-gray-400 mb-3">Have the receiver sign to confirm delivery.</p>
+              <div className="grid sm:grid-cols-2 gap-3 mb-3">
+                <ActField label="Receiver Signature (Print Name) *" value={receiverSigName} onChange={setReceiverSigName} />
+                <ActField label="Delivery Condition" value={deliveryCondition} onChange={setDeliveryCondition} />
+                <ActField label="Pieces Delivered" value={deliveryPieces} onChange={setDeliveryPieces} />
+              </div>
+              <button
+                onClick={captureReceiverSignature}
+                disabled={saving}
+                className="w-full bg-green-600 text-white py-2.5 rounded-sm font-mono text-xs uppercase tracking-wide hover:bg-green-800 disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Capture Receiver Signature"}
+              </button>
+            </div>
+          )}
+
+          {canComplete && (
+            <div className="border-t-2 border-highway pt-4">
+              <h3 className="text-sm font-bold uppercase tracking-wide text-asphalt mb-3">Close Out Load</h3>
+              <button
+                onClick={markCompleted}
+                disabled={saving}
+                className="w-full bg-green-600 text-white py-2.5 rounded-sm font-mono text-xs uppercase tracking-wide hover:bg-green-800 disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Mark Completed"}
+              </button>
             </div>
           )}
         </div>
