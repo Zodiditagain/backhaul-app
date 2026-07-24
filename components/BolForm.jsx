@@ -24,6 +24,15 @@ const emptyItem = {
   handling_instructions: "",
 };
 
+async function logAudit(bolId, userId, action, details) {
+  await supabase.from("bol_audit_log").insert({
+    bol_id: bolId,
+    user_id: userId,
+    action,
+    details: details || null,
+  });
+}
+
 export default function BolForm({ match, user, existingBol, onClose, onSaved }) {
   const [form, setForm] = useState({
     bol_number: "",
@@ -66,7 +75,7 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
   useEffect(() => {
     async function init() {
       if (existingBol) {
-        const { id, created_at, updated_at, status, correction_note, match_id, broker_id, trucker_id, driver_name, driver_phone, truck_number, trailer_number, ...rest } = existingBol;
+        const { id, created_at, updated_at, status, correction_note, match_id, broker_id, trucker_id, driver_name, driver_phone, truck_number, trailer_number, version, ...rest } = existingBol;
         setForm((prev) => ({ ...prev, ...Object.fromEntries(Object.entries(rest).map(([k, v]) => [k, v ?? ""])) }));
         const { data: itemData } = await supabase
           .from("bol_items")
@@ -122,6 +131,24 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
     }
     setSaving(true);
 
+    const isCorrectionResend = existingBol && existingBol.status === "correction_requested";
+    let nextVersion = existingBol?.version || 1;
+
+    // Snapshot the current version before overwriting, if this is a correction being resent
+    if (isCorrectionResend) {
+      const { data: existingItems } = await supabase
+        .from("bol_items")
+        .select("*")
+        .eq("bol_id", existingBol.id);
+
+      await supabase.from("bol_versions").insert({
+        bol_id: existingBol.id,
+        version: nextVersion,
+        snapshot: { ...existingBol, items: existingItems || [] },
+      });
+      nextVersion = nextVersion + 1;
+    }
+
     const payload = {
       ...form,
       pickup_date: form.pickup_date || null,
@@ -130,6 +157,7 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
       broker_id: user.id,
       trucker_id: match.trucker_id,
       status,
+      version: nextVersion,
       updated_at: new Date().toISOString(),
     };
 
@@ -174,20 +202,29 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
         sender_id: user.id,
         text: `📄 Bill of Lading ${form.bol_number} — carrier action required.`,
       });
+      await logAudit(
+        bolId,
+        user.id,
+        isCorrectionResend ? "corrected_resent" : existingBol ? "edited_and_sent" : "created_and_sent",
+        `BOL ${form.bol_number}${isCorrectionResend ? ` — version ${nextVersion}` : ""}`
+      );
+    } else {
+      await logAudit(bolId, user.id, "draft_saved", `BOL ${form.bol_number}`);
     }
 
     setSaving(false);
     if (onSaved) onSaved();
     onClose();
-  }
-
-  return (
+  }return (
     <div className="fixed inset-0 bg-asphalt/80 z-40 flex items-center justify-center px-4 py-6">
       <div className="bg-white rounded-sm w-full max-w-2xl border border-gray-300 flex flex-col max-h-[90vh]">
         <div className="bg-asphalt text-white px-5 py-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <FileText size={18} />
             <span className="text-lg font-bold">Bill of Lading</span>
+            {existingBol?.version > 1 && (
+              <span className="text-[10px] bg-white/20 rounded-sm px-1.5 py-0.5 font-mono">v{existingBol.version}</span>
+            )}
           </div>
           <button type="button" onClick={onClose} className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-sm">
             <X size={20} />
@@ -240,6 +277,7 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
             </div>
             <TextArea label="Delivery Instructions" value={form.delivery_instructions} onChange={(v) => set("delivery_instructions", v)} />
           </section>
+
           <section>
             <h3 className="text-sm font-bold uppercase tracking-wide text-steelgray border-b border-gray-200 pb-2 mb-3">Carrier</h3>
             <div className="grid sm:grid-cols-2 gap-3">
