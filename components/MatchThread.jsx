@@ -882,7 +882,13 @@ export default function MatchThread({ match, user, role, onReviewSubmitted, onMe
               <h3 className="text-sm font-bold uppercase tracking-wide text-asphalt mb-3">Proof of Delivery</h3>
 
               {podUrl && (
-                
+{podUrl && (
+  
+    href={podUrl}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="flex items-center gap-2 text-sm text-blue-600 underline mb-3"
+  >
                   href={podUrl}
                   target="_blank"
                   rel="noopener noreferrer"
