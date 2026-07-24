@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Send, Star, CheckCircle2, FileText, X, Upload, Camera, Paperclip } from "lucide-react";
+import { Send, Star, CheckCircle2, FileText, X, Upload, Camera, Paperclip, Clock } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import BolForm from "./BolForm";
 
@@ -30,6 +30,31 @@ const STATUS_COLORS = {
   receiver_signed: "text-highway",
   completed: "text-highway",
 };
+
+const ACTION_LABELS = {
+  created_and_sent: "Created and sent to carrier",
+  edited_and_sent: "Edited and sent to carrier",
+  corrected_resent: "Correction fixed and resent",
+  draft_saved: "Draft saved",
+  accepted: "Accepted BOL",
+  correction_requested: "Requested correction",
+  ready_for_pickup: "Marked ready for pickup",
+  signed_at_pickup: "Signed at pickup",
+  in_transit: "Marked in transit",
+  delivered: "Marked delivered",
+  receiver_signed: "Receiver signature captured",
+  completed: "Marked completed",
+  pod_uploaded: "Uploaded proof of delivery",
+};
+
+async function logAudit(bolId, userId, action, details) {
+  await supabase.from("bol_audit_log").insert({
+    bol_id: bolId,
+    user_id: userId,
+    action,
+    details: details || null,
+  });
+}
 
 export default function MatchThread({ match, user, role, onReviewSubmitted, onMessageSent }) {
   const [messages, setMessages] = useState([]);
@@ -212,6 +237,9 @@ export default function MatchThread({ match, user, role, onReviewSubmitted, onMe
             <div className="bg-asphalt/5 border-b border-gray-200 px-3 py-2 flex items-center gap-2">
               <FileText size={14} className="text-steelgray" />
               <span className="text-xs font-bold uppercase tracking-wide text-asphalt">Bill of Lading</span>
+              {bol.version > 1 && (
+                <span className="text-[10px] bg-gray-200 text-gray-600 rounded-sm px-1.5 py-0.5 font-mono">v{bol.version}</span>
+              )}
             </div>
             <div className="px-3 py-2.5 text-xs text-steelgray space-y-1">
               <div><span className="text-gray-400">BOL:</span> {bol.bol_number}</div>
@@ -334,8 +362,7 @@ export default function MatchThread({ match, user, role, onReviewSubmitted, onMe
       )}
     </div>
   );
-}
-function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
+}function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
   const [items, setItems] = useState([]);
   const [driverName, setDriverName] = useState(bol.driver_name || "");
   const [driverPhone, setDriverPhone] = useState(bol.driver_phone || "");
@@ -362,6 +389,9 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
+  const [auditLog, setAuditLog] = useState([]);
+  const [auditNames, setAuditNames] = useState({});
+
   const isTrucker = role === "trucker";
   const isBroker = role === "broker";
   const canAct = isTrucker && bol.status === "sent";
@@ -378,10 +408,30 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
         .order("created_at", { ascending: true });
       setItems(data || []);
     }
+    async function loadAudit() {
+      const { data } = await supabase
+        .from("bol_audit_log")
+        .select("*")
+        .eq("bol_id", bol.id)
+        .order("created_at", { ascending: false });
+      setAuditLog(data || []);
+
+      const userIds = [...new Set((data || []).map((a) => a.user_id).filter(Boolean))];
+      if (userIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from("profiles")
+          .select("id, company_name")
+          .in("id", userIds);
+        const nameMap = {};
+        (profilesData || []).forEach((p) => { nameMap[p.id] = p.company_name; });
+        setAuditNames(nameMap);
+      }
+    }
     loadItems();
+    loadAudit();
   }, [bol.id]);
 
-  async function updateBol(fields, messageText) {
+  async function updateBol(fields, messageText, auditAction, auditDetails) {
     setError("");
     setSaving(true);
     const { error: updateError } = await supabase
@@ -395,6 +445,9 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
           sender_id: user.id,
           text: messageText,
         });
+      }
+      if (auditAction) {
+        await logAudit(bol.id, user.id, auditAction, auditDetails);
       }
       onUpdated();
       onClose();
@@ -418,7 +471,9 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
         seal_number: sealNumber || null,
         status: "accepted",
       },
-      `✅ BOL ${bol.bol_number} accepted. Driver: ${driverName}.`
+      `✅ BOL ${bol.bol_number} accepted. Driver: ${driverName}.`,
+      "accepted",
+      `Driver: ${driverName}`
     );
   }
 
@@ -429,14 +484,18 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
     }
     await updateBol(
       { status: "correction_requested", correction_note: correctionNote },
-      `⚠️ Correction requested for BOL ${bol.bol_number}: ${correctionNote}`
+      `⚠️ Correction requested for BOL ${bol.bol_number}: ${correctionNote}`,
+      "correction_requested",
+      correctionNote
     );
   }
 
   async function markReadyForPickup() {
     await updateBol(
       { status: "ready_for_pickup" },
-      `🚚 BOL ${bol.bol_number} marked ready for pickup.`
+      `🚚 BOL ${bol.bol_number} marked ready for pickup.`,
+      "ready_for_pickup",
+      null
     );
   }
 
@@ -457,21 +516,27 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
         pickup_pieces_count: pickupPieces || null,
         picked_up_at: now,
       },
-      `✍️ BOL ${bol.bol_number} signed at pickup by ${driverSigName}.`
+      `✍️ BOL ${bol.bol_number} signed at pickup by ${driverSigName}.`,
+      "signed_at_pickup",
+      `Driver signature: ${driverSigName}${shipperSigName ? `, Shipper signature: ${shipperSigName}` : ""}`
     );
   }
 
   async function markInTransit() {
     await updateBol(
       { status: "in_transit" },
-      `🛣️ BOL ${bol.bol_number} is now in transit.`
+      `🛣️ BOL ${bol.bol_number} is now in transit.`,
+      "in_transit",
+      null
     );
   }
 
   async function markDelivered() {
     await updateBol(
       { status: "delivered", delivered_at: new Date().toISOString() },
-      `📦 BOL ${bol.bol_number} marked delivered.`
+      `📦 BOL ${bol.bol_number} marked delivered.`,
+      "delivered",
+      null
     );
   }
 
@@ -488,14 +553,18 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
         delivery_condition: deliveryCondition || null,
         delivery_pieces_count: deliveryPieces || null,
       },
-      `✍️ Receiver signature captured for BOL ${bol.bol_number} (${receiverSigName}).`
+      `✍️ Receiver signature captured for BOL ${bol.bol_number} (${receiverSigName}).`,
+      "receiver_signed",
+      `Receiver signature: ${receiverSigName}`
     );
   }
 
   async function markCompleted() {
     await updateBol(
       { status: "completed" },
-      `🎉 BOL ${bol.bol_number} marked completed.`
+      `🎉 BOL ${bol.bol_number} marked completed.`,
+      "completed",
+      null
     );
   }
 
@@ -540,6 +609,8 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
       text: `📎 Signed BOL / POD uploaded for ${bol.bol_number}.`,
     });
 
+    await logAudit(bol.id, user.id, "pod_uploaded", file.name);
+
     setPodUrl(urlData.publicUrl);
     setPodUploadedAt(nowIso);
     setUploading(false);
@@ -554,6 +625,9 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
           <div className="flex items-center gap-2">
             <FileText size={18} />
             <span className="text-lg font-bold">BOL {bol.bol_number}</span>
+            {bol.version > 1 && (
+              <span className="text-[10px] bg-white/20 rounded-sm px-1.5 py-0.5 font-mono">v{bol.version}</span>
+            )}
           </div>
           <button type="button" onClick={onClose} className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-sm">
             <X size={20} />
@@ -808,7 +882,7 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
               <h3 className="text-sm font-bold uppercase tracking-wide text-asphalt mb-3">Proof of Delivery</h3>
 
               {podUrl && (
-               <a 
+                
                   href={podUrl}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -855,6 +929,27 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
                   </button>
                 </div>
               )}
+            </div>
+          )}
+
+          {auditLog.length > 0 && (
+            <div className="border-t-2 border-gray-300 pt-4">
+              <h3 className="text-sm font-bold uppercase tracking-wide text-asphalt mb-3 flex items-center gap-1.5">
+                <Clock size={14} /> History
+              </h3>
+              <div className="space-y-2">
+                {auditLog.map((entry) => (
+                  <div key={entry.id} className="text-xs text-steelgray border-l-2 border-gray-200 pl-2.5">
+                    <div className="font-semibold text-asphalt">
+                      {ACTION_LABELS[entry.action] || entry.action}
+                    </div>
+                    <div className="text-gray-400">
+                      {auditNames[entry.user_id] || "Unknown"} — {new Date(entry.created_at).toLocaleString()}
+                    </div>
+                    {entry.details && <div className="text-gray-500 mt-0.5">{entry.details}</div>}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
