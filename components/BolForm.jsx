@@ -8,6 +8,13 @@ const EQUIPMENT_TYPES = [
   "Dry Van", "Reefer", "Flatbed", "Step Deck", "Hotshot", "Power Only", "Box Truck", "Other",
 ];
 
+const STATES = [
+  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA",
+  "KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+  "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT",
+  "VA","WA","WV","WI","WY",
+];
+
 const PACKAGING_TYPES = [
   "Pallets", "Boxes", "Crates", "Drums", "Bundles", "Rolls", "Loose", "Other",
 ];
@@ -134,7 +141,6 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
     const isCorrectionResend = existingBol && existingBol.status === "correction_requested";
     let nextVersion = existingBol?.version || 1;
 
-    // Snapshot the current version before overwriting, if this is a correction being resent
     if (isCorrectionResend) {
       const { data: existingItems } = await supabase
         .from("bol_items")
@@ -215,7 +221,8 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
     setSaving(false);
     if (onSaved) onSaved();
     onClose();
-  }return (
+  }
+  return (
     <div className="fixed inset-0 bg-asphalt/80 z-40 flex items-center justify-center px-4 py-6">
       <div className="bg-white rounded-sm w-full max-w-2xl border border-gray-300 flex flex-col max-h-[90vh]">
         <div className="bg-asphalt text-white px-5 py-4 flex items-center justify-between shrink-0">
@@ -253,7 +260,19 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
               <Field label="Pickup Address" value={form.shipper_address} onChange={(v) => set("shipper_address", v)} />
               <Field label="City" value={form.shipper_city} onChange={(v) => set("shipper_city", v)} />
               <div className="grid grid-cols-2 gap-3">
-                <Field label="State" value={form.shipper_state} onChange={(v) => set("shipper_state", v)} />
+                <div>
+                  <label className="block text-xs uppercase tracking-wide text-steelgray mb-1">State</label>
+                  <select
+                    value={form.shipper_state}
+                    onChange={(e) => set("shipper_state", e.target.value)}
+                    className="w-full border border-gray-300 rounded-sm px-3 py-2 text-sm bg-white"
+                  >
+                    <option value="">Select...</option>
+                    {STATES.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
                 <Field label="ZIP" value={form.shipper_zip} onChange={(v) => set("shipper_zip", v)} />
               </div>
               <Field label="Contact Name" value={form.shipper_contact} onChange={(v) => set("shipper_contact", v)} />
@@ -269,7 +288,19 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
               <Field label="Delivery Address" value={form.consignee_address} onChange={(v) => set("consignee_address", v)} />
               <Field label="City" value={form.consignee_city} onChange={(v) => set("consignee_city", v)} />
               <div className="grid grid-cols-2 gap-3">
-                <Field label="State" value={form.consignee_state} onChange={(v) => set("consignee_state", v)} />
+                <div>
+                  <label className="block text-xs uppercase tracking-wide text-steelgray mb-1">State</label>
+                  <select
+                    value={form.consignee_state}
+                    onChange={(e) => set("consignee_state", e.target.value)}
+                    className="w-full border border-gray-300 rounded-sm px-3 py-2 text-sm bg-white"
+                  >
+                    <option value="">Select...</option>
+                    {STATES.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
                 <Field label="ZIP" value={form.consignee_zip} onChange={(v) => set("consignee_zip", v)} />
               </div>
               <Field label="Contact Name" value={form.consignee_contact} onChange={(v) => set("consignee_contact", v)} />
