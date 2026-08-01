@@ -60,7 +60,7 @@ export default function Dashboard() {
             {profile.is_admin && (
               <Link
                 href="/admin"
-                className="flex items-center gap-1.5 text-amberx hover:text-white text-xs font-mono uppercase tracking-wide"
+                className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-mono uppercase tracking-wide px-2.5 py-1.5 rounded-sm"
               >
                 <Shield size={14} /> Admin
               </Link>
