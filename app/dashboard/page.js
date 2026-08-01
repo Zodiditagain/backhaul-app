@@ -6,6 +6,7 @@ import { Truck, LogOut, Settings } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import TruckerDashboard from "../../components/TruckerDashboard";
 import MatchmakingDashboard from "../../components/MatchmakingDashboard";
+import NotificationBell from "../../components/NotificationBell";
 export default function Dashboard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -55,6 +56,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="flex items-center gap-5">
+            <NotificationBell user={user} />
             {isPartner && (
               <Link
                 href="/onboarding-partner"
