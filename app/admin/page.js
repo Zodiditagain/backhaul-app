@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Shield, Users, FileText, Handshake, ArrowLeft } from "lucide-react";
+import { Shield, Users, FileText, Handshake, ArrowLeft, ShieldCheck, ShieldOff } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 
 const STATUS_LABELS = {
@@ -23,11 +23,32 @@ export default function AdminPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [authorized, setAuthorized] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState(null);
   const [profiles, setProfiles] = useState([]);
   const [bols, setBols] = useState([]);
   const [matches, setMatches] = useState([]);
   const [tab, setTab] = useState("overview");
   const [search, setSearch] = useState("");
+  const [toggling, setToggling] = useState(null);
+
+  async function loadAll() {
+    const { data: profilesData } = await supabase
+      .from("profiles")
+      .select("*")
+      .order("created_at", { ascending: false });
+    setProfiles(profilesData || []);
+
+    const { data: bolsData } = await supabase
+      .from("bols")
+      .select("*")
+      .order("created_at", { ascending: false });
+    setBols(bolsData || []);
+
+    const { data: matchesData } = await supabase
+      .from("matches")
+      .select("*");
+    setMatches(matchesData || []);
+  }
 
   useEffect(() => {
     async function init() {
@@ -36,6 +57,7 @@ export default function AdminPage() {
         router.replace("/login");
         return;
       }
+      setCurrentUserId(sessionData.session.user.id);
       const { data: myProfile } = await supabase
         .from("profiles")
         .select("is_admin")
@@ -47,29 +69,28 @@ export default function AdminPage() {
         return;
       }
       setAuthorized(true);
-
-      const { data: profilesData } = await supabase
-        .from("profiles")
-        .select("*")
-        .order("created_at", { ascending: false });
-      setProfiles(profilesData || []);
-
-      const { data: bolsData } = await supabase
-        .from("bols")
-        .select("*")
-        .order("created_at", { ascending: false });
-      setBols(bolsData || []);
-
-      const { data: matchesData } = await supabase
-        .from("matches")
-        .select("*");
-      setMatches(matchesData || []);
-
+      await loadAll();
       setLoading(false);
     }
     init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
+
+  async function toggleAdmin(profileId, currentValue) {
+    if (profileId === currentUserId && currentValue) {
+      const confirmed = window.confirm("This will remove your own admin access. Continue?");
+      if (!confirmed) return;
+    }
+    setToggling(profileId);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ is_admin: !currentValue })
+      .eq("id", profileId);
+    if (!error) {
+      setProfiles((prev) => prev.map((p) => (p.id === profileId ? { ...p, is_admin: !currentValue } : p)));
+    }
+    setToggling(null);
+  }
 
   if (loading) return <div className="p-8 text-steelgray">Loading admin console...</div>;
   if (!authorized) return null;
@@ -97,6 +118,9 @@ export default function AdminPage() {
     (b.bol_number || "").toLowerCase().includes(search.toLowerCase()) ||
     (profileMap[b.broker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase()) ||
     (profileMap[b.trucker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase())
+  );
+  const filteredAdminSearch = profiles.filter((p) =>
+    (p.company_name || "").toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -147,16 +171,22 @@ export default function AdminPage() {
 
         <div className="flex items-center gap-2 border-b border-gray-300">
           <button
-            onClick={() => setTab("overview")}
+            onClick={() => { setTab("overview"); setSearch(""); }}
             className={`px-4 py-2 text-sm font-mono uppercase tracking-wide border-b-2 ${tab === "overview" ? "border-amberx text-asphalt font-semibold" : "border-transparent text-gray-400"}`}
           >
             All BOLs
           </button>
           <button
-            onClick={() => setTab("users")}
+            onClick={() => { setTab("users"); setSearch(""); }}
             className={`px-4 py-2 text-sm font-mono uppercase tracking-wide border-b-2 ${tab === "users" ? "border-amberx text-asphalt font-semibold" : "border-transparent text-gray-400"}`}
           >
             All Users
+          </button>
+          <button
+            onClick={() => { setTab("admins"); setSearch(""); }}
+            className={`px-4 py-2 text-sm font-mono uppercase tracking-wide border-b-2 ${tab === "admins" ? "border-amberx text-asphalt font-semibold" : "border-transparent text-gray-400"}`}
+          >
+            Manage Admins
           </button>
         </div>
 
@@ -252,6 +282,60 @@ export default function AdminPage() {
                 {filteredProfiles.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-3 py-6 text-center text-gray-400 italic">No users found.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {tab === "admins" && (
+          <div className="bg-white border border-gray-300 rounded-sm overflow-x-auto">
+            <div className="px-3 py-2.5 bg-amberx/10 border-b border-amberx/30 text-xs text-steelgray">
+              Toggle admin access for any account. Admins can view all users, BOLs, and matches across the platform.
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200 text-left">
+                  <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Company</th>
+                  <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Role</th>
+                  <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Admin Status</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAdminSearch.map((p) => (
+                  <tr key={p.id} className="border-b border-gray-100">
+                    <td className="px-3 py-2 font-semibold">
+                      {p.company_name}
+                      {p.id === currentUserId && <span className="ml-1.5 text-[10px] text-gray-400 font-mono">(you)</span>}
+                    </td>
+                    <td className="px-3 py-2 capitalize text-xs">{p.role}</td>
+                    <td className="px-3 py-2 text-xs">
+                      {p.is_admin ? (
+                        <span className="text-highway font-semibold flex items-center gap-1"><ShieldCheck size={13} /> Admin</span>
+                      ) : (
+                        <span className="text-gray-400 flex items-center gap-1"><ShieldOff size={13} /> Not admin</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <button
+                        onClick={() => toggleAdmin(p.id, p.is_admin)}
+                        disabled={toggling === p.id}
+                        className={`text-[11px] uppercase tracking-wide rounded-sm px-2.5 py-1.5 font-mono disabled:opacity-50 ${
+                          p.is_admin
+                            ? "border border-alertred text-alertred hover:bg-alertred/10"
+                            : "bg-asphalt text-white hover:bg-black"
+                        }`}
+                      >
+                        {toggling === p.id ? "..." : p.is_admin ? "Revoke Admin" : "Grant Admin"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {filteredAdminSearch.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-3 py-6 text-center text-gray-400 italic">No users found.</td>
                   </tr>
                 )}
               </tbody>
