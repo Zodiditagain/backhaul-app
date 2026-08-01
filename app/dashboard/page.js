@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Truck, LogOut, Settings } from "lucide-react";
+import { Truck, LogOut, Settings, Shield } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import TruckerDashboard from "../../components/TruckerDashboard";
 import MatchmakingDashboard from "../../components/MatchmakingDashboard";
@@ -57,6 +57,14 @@ export default function Dashboard() {
           </div>
           <div className="flex items-center gap-5">
             <NotificationBell user={user} />
+            {profile.is_admin && (
+              <Link
+                href="/admin"
+                className="flex items-center gap-1.5 text-amberx hover:text-white text-xs font-mono uppercase tracking-wide"
+              >
+                <Shield size={14} /> Admin
+              </Link>
+            )}
             {isPartner && (
               <Link
                 href="/onboarding-partner"
