@@ -132,11 +132,16 @@ export default function AdminPage() {
     (p.company_name || "").toLowerCase().includes(search.toLowerCase())
   );
   const filteredMatches = matches.filter((m) =>
-    (profileMap[m.broker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase()) ||
+  (profileMap[m.broker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase()) ||
     (profileMap[m.trucker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase()) ||
-    (profileMap[m.vendor_id]?.company_name ||
-     const searchPlaceholders = {
-    overview: "Search by BOL number or company...",
+    (profileMap[m.vendor_id]?.company_name || "").toLowerCase().includes(search.toLowerCase())
+  );
+  const filteredMessages = messages.filter((m) =>
+    (m.text || "").toLowerCase().includes(search.toLowerCase()) ||
+    (profileMap[m.sender_id]?.company_name || "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  const searchPlaceholders = {    overview: "Search by BOL number or company...",
     users: "Search by company name...",
     admins: "Search by company name...",
     matches: "Search by broker, carrier, or vendor company...",
