@@ -182,7 +182,80 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
       const { error: updateError } = await supabase.from("bols").update(payload).eq("id", bolId);
       if (updateError) {
         setError(updateError.message);
-        return (
+        setSaving(false);
+        return;
+      }
+      await supabase.from("bol_items").delete().eq("bol_id", bolId);
+    } else {
+      const { data: inserted, error: insertError } = await supabase
+        .from("bols")
+        .insert(payload)
+        .select("id")
+        .single();
+      if (insertError) {
+        setError(insertError.message);
+        setSaving(false);
+        return;
+      }
+      bolId = inserted.id;
+    }
+
+    const itemRows = items
+      .filter((i) => i.quantity || i.description || i.weight)
+      .map(({ id, created_at, bol_id, ...rest }) => ({ ...rest, bol_id: bolId }));
+    if (itemRows.length > 0) {
+      const { error: itemsError } = await supabase.from("bol_items").insert(itemRows);
+      if (itemsError) {
+        setError(itemsError.message);
+        setSaving(false);
+        return;
+      }
+    }
+
+    if (isNewBol) {
+      await logAuditEvent({
+        actorId: user.id,
+        actorRole: "broker",
+        companyName: brokerCompanyName,
+        eventType: "bol",
+        action: "Created BOL",
+        bolId,
+        matchId: match.id,
+        metadata: { bol_number: form.bol_number },
+      });
+    }
+
+    if (status === "sent") {
+      await supabase.from("messages").insert({
+        match_id: match.id,
+        sender_id: user.id,
+        text: `📄 Bill of Lading ${form.bol_number} — carrier action required.`,
+      });
+      await logAudit(
+        bolId,
+        user.id,
+        isCorrectionResend ? "corrected_resent" : existingBol ? "edited_and_sent" : "created_and_sent",
+        `BOL ${form.bol_number}${isCorrectionResend ? ` — version ${nextVersion}` : ""}`
+      );
+      await logAuditEvent({
+        actorId: user.id,
+        actorRole: "broker",
+        companyName: brokerCompanyName,
+        eventType: "bol",
+        action: isCorrectionResend ? "Resent Corrected BOL" : "Sent BOL",
+        bolId,
+        matchId: match.id,
+        metadata: { bol_number: form.bol_number, version: nextVersion },
+      });
+    } else {
+      await logAudit(bolId, user.id, "draft_saved", `BOL ${form.bol_number}`);
+    }
+
+    setSaving(false);
+    if (onSaved) onSaved();
+    onClose();
+  }
+  return (
     <div className="fixed inset-0 bg-asphalt/80 z-40 flex items-center justify-center px-4 py-6">
       <div className="bg-white rounded-sm w-full max-w-2xl border border-gray-300 flex flex-col max-h-[90vh]">
         <div className="bg-asphalt text-white px-5 py-4 flex items-center justify-between shrink-0">
