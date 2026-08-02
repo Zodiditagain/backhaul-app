@@ -469,13 +469,13 @@ export default function AdminPage() {
                     <td className="px-3 py-2">
                       
                         href={b.pod_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-600 underline"
-                      >
-                        View POD
-                      </a>
-                    </td>
+                     href={b.pod_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-600 underline"
+                    >
+                      View POD
+                    </a>                    </td>
                   </tr>
                 ))}
                 {filteredPods.length === 0 && (
