@@ -308,12 +308,7 @@ export default function AdminPage() {
                     <td className="px-3 py-2 text-xs font-semibold">{STATUS_LABELS[b.status] || b.status}</td>
                     <td className="px-3 py-2 text-xs text-gray-400">{new Date(b.created_at).toLocaleDateString()}</td>
                     <td className="px-3 py-2">
-                      <Link
-                        href={`/dashboard?openMatch=${b.match_id}`}
-                        className="text-xs text-blue-600 underline"
-                      >
-                        Open
-                      </Link>
+                      <Link href={`/dashboard?openMatch=${b.match_id}`} className="text-xs text-blue-600 underline">Open</Link>
                     </td>
                   </tr>
                 ))}
@@ -357,9 +352,7 @@ export default function AdminPage() {
                     </td>
                     <td className="px-3 py-2 text-xs text-gray-400">{new Date(p.created_at).toLocaleDateString()}</td>
                     <td className="px-3 py-2">
-                      <Link href={`/company/${p.id}`} className="text-xs text-blue-600 underline">
-                        View Profile
-                      </Link>
+                      <Link href={`/company/${p.id}`} className="text-xs text-blue-600 underline">View Profile</Link>
                     </td>
                   </tr>
                 ))}
@@ -428,12 +421,7 @@ export default function AdminPage() {
                     <td className="px-3 py-2 text-xs">{m.rate ? `$${m.rate}` : "—"}</td>
                     <td className="px-3 py-2 text-xs text-gray-400">{new Date(m.created_at).toLocaleString()}</td>
                     <td className="px-3 py-2">
-                      <Link
-                        href={`/dashboard?openMatch=${m.match_id}`}
-                        className="text-xs text-blue-600 underline"
-                      >
-                        Open thread
-                      </Link>
+                      <Link href={`/dashboard?openMatch=${m.match_id}`} className="text-xs text-blue-600 underline">Open thread</Link>
                     </td>
                   </tr>
                 ))}
@@ -466,17 +454,9 @@ export default function AdminPage() {
                     <td className="px-3 py-2">{profileMap[b.trucker_id]?.company_name || "—"}</td>
                     <td className="px-3 py-2 text-xs text-gray-400">{b.delivered_at ? new Date(b.delivered_at).toLocaleDateString() : "—"}</td>
                     <td className="px-3 py-2 text-xs text-gray-400">{b.pod_uploaded_at ? new Date(b.pod_uploaded_at).toLocaleString() : "—"}</td>
-                    <td className="px-3 py-2">
-                      
-                        href={b.pod_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-600 underline"
-                      >
-                        View POD
-                      </a>
-                    </td>
-                  </tr>                ))}
+                    <td className="px-3 py-2"><a href={b.pod_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 underline">View POD</a></td>
+                  </tr>
+                ))}
                 {filteredPods.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-3 py-6 text-center text-gray-400 italic">No PODs uploaded yet.</td>
@@ -490,7 +470,7 @@ export default function AdminPage() {
         {tab === "suspended" && (
           <div className="bg-white border border-gray-300 rounded-sm overflow-x-auto">
             <div className="px-3 py-2.5 bg-alertred/10 border-b border-alertred/30 text-xs text-steelgray">
-              Accounts suspended from the platform. Toggle from the Manage Admins tab search or here to restore access.
+              Accounts suspended from the platform.
             </div>
             <table className="w-full text-sm">
               <thead>
