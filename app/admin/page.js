@@ -171,8 +171,65 @@ export default function AdminPage() {
     (p.company_name || "").toLowerCase().includes(search.toLowerCase())
   );
   const filteredBols = bols.filter((b) =>
-    (b.bol_number ||
-     const securityAlertCount = auditEvents.filter((e) => e.event_type === "security").length;
+    (b.bol_number || "").toLowerCase().includes(search.toLowerCase()) ||
+    (profileMap[b.broker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase()) ||
+    (profileMap[b.trucker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase())
+  );
+  const filteredAdminSearch = profiles.filter((p) =>
+    (p.company_name || "").toLowerCase().includes(search.toLowerCase())
+  );
+  const filteredMatches = matches.filter((m) =>
+    (profileMap[m.broker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase()) ||
+    (profileMap[m.trucker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase()) ||
+    (profileMap[m.vendor_id]?.company_name || "").toLowerCase().includes(search.toLowerCase())
+  );
+  const filteredMessages = messages.filter((m) =>
+    (m.text || "").toLowerCase().includes(search.toLowerCase()) ||
+    (profileMap[m.sender_id]?.company_name || "").toLowerCase().includes(search.toLowerCase())
+  );
+  const filteredPods = bolsWithPod.filter((b) =>
+    (b.bol_number || "").toLowerCase().includes(search.toLowerCase()) ||
+    (profileMap[b.trucker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase())
+  );
+  const filteredSuspended = profiles.filter((p) =>
+    p.is_suspended && (p.company_name || "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  const now = new Date();
+  const auditCutoff = new Date(now);
+  if (auditDateRange === "today") {
+    auditCutoff.setHours(0, 0, 0, 0);
+  } else if (auditDateRange === "week") {
+    auditCutoff.setDate(auditCutoff.getDate() - 7);
+  } else if (auditDateRange === "month") {
+    auditCutoff.setDate(auditCutoff.getDate() - 30);
+  } else {
+    auditCutoff.setFullYear(2000);
+  }
+
+  const filteredAuditEvents = auditEvents.filter((e) => {
+    if (new Date(e.created_at) < auditCutoff) return false;
+    if (auditUserType !== "all" && e.actor_role !== auditUserType) return false;
+    if (auditEventType !== "all" && e.event_type !== auditEventType) return false;
+    if (auditStatus !== "all" && e.status !== auditStatus) return false;
+    if (search && !(
+      (e.company_name || "").toLowerCase().includes(search.toLowerCase()) ||
+      (e.action || "").toLowerCase().includes(search.toLowerCase())
+    )) return false;
+    return true;
+  });
+
+  const searchPlaceholders = {
+    overview: "Search by BOL number or company...",
+    users: "Search by company name...",
+    admins: "Search by company name...",
+    matches: "Search by broker, carrier, or vendor company...",
+    messages: "Search message text or sender...",
+    pods: "Search by BOL number or carrier...",
+    suspended: "Search suspended accounts...",
+    audit: "Search by company or action...",
+  };
+  const securityAlertCount = auditEvents.filter((e) => e.event_type === "security").length;
 
   return (
     <div className="min-h-screen bg-gray-100">
