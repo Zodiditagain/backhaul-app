@@ -469,15 +469,14 @@ export default function AdminPage() {
                     <td className="px-3 py-2">
                       
                         href={b.pod_url}
-                     href={b.pod_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-blue-600 underline"
-                    >
-                      View POD
-                    </a>                    </td>
-                  </tr>
-                ))}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 underline"
+                      >
+                        View POD
+                      </a>
+                    </td>
+                  </tr>                ))}
                 {filteredPods.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-3 py-6 text-center text-gray-400 italic">No PODs uploaded yet.</td>
