@@ -739,9 +739,12 @@ export default function AdminPage() {
 }
 
 function StatCard({ icon, label, value, highlight }) {
+  const isHighlighted = highlight && value > 0;
   return (
-    <div className={`rounded-sm p-4 flex flex-col gap-2 ${highlight && value > 0 ? "bg-alertred" : "bg-asphalt"}`}>
-      <div className="flex items-center justify-between">
+    <div
+      className="rounded-sm p-4 flex flex-col gap-2"
+      style={{ backgroundColor: isHighlighted ? "#DC2626" : "#1B1E21" }}
+    >      <div className="flex items-center justify-between">
         <span className="text-xs uppercase tracking-widest text-gray-300 font-mono">{label}</span>
         <div className={`w-6 h-6 rotate-45 flex items-center justify-center ${highlight && value > 0 ? "bg-white" : "bg-amberx"}`}>
           <span className={`-rotate-45 ${highlight && value > 0 ? "text-alertred" : "text-asphalt"}`}>{icon}</span>
