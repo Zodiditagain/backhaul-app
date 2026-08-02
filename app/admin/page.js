@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Shield, Users, FileText, Handshake, ArrowLeft, ShieldCheck, ShieldOff, MessageSquare, Camera, Ban, CheckCircle2 } from "lucide-react";
+import { Shield, Users, FileText, Handshake, ArrowLeft, ShieldCheck, ShieldOff, MessageSquare, Camera, Ban, CheckCircle2, Activity } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 
 const STATUS_LABELS = {
@@ -19,6 +19,17 @@ const STATUS_LABELS = {
   completed: "Completed",
 };
 
+const ROLE_DISPLAY = {
+  trucker: "Carrier",
+  broker: "Broker",
+  vendor: "Vendor",
+  admin: "Admin",
+};
+
+const EVENT_TYPE_OPTIONS = ["login", "bol", "load", "message", "subscription", "admin", "security"];
+const USER_TYPE_OPTIONS = ["trucker", "broker", "vendor", "admin"];
+const STATUS_OPTIONS = ["success", "warning", "failed"];
+
 export default function AdminPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -28,10 +39,16 @@ export default function AdminPage() {
   const [bols, setBols] = useState([]);
   const [matches, setMatches] = useState([]);
   const [messages, setMessages] = useState([]);
+  const [auditEvents, setAuditEvents] = useState([]);
   const [tab, setTab] = useState("overview");
   const [search, setSearch] = useState("");
   const [toggling, setToggling] = useState(null);
   const [suspending, setSuspending] = useState(null);
+
+  const [auditDateRange, setAuditDateRange] = useState("week");
+  const [auditUserType, setAuditUserType] = useState("all");
+  const [auditEventType, setAuditEventType] = useState("all");
+  const [auditStatus, setAuditStatus] = useState("all");
 
   async function loadAll() {
     const { data: profilesData } = await supabase
@@ -58,6 +75,13 @@ export default function AdminPage() {
       .order("created_at", { ascending: false })
       .limit(200);
     setMessages(messagesData || []);
+
+    const { data: auditData } = await supabase
+      .from("audit_events")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(500);
+    setAuditEvents(auditData || []);
   }
 
   useEffect(() => {
@@ -147,39 +171,9 @@ export default function AdminPage() {
     (p.company_name || "").toLowerCase().includes(search.toLowerCase())
   );
   const filteredBols = bols.filter((b) =>
-    (b.bol_number || "").toLowerCase().includes(search.toLowerCase()) ||
-    (profileMap[b.broker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase()) ||
-    (profileMap[b.trucker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase())
-  );
-  const filteredAdminSearch = profiles.filter((p) =>
-    (p.company_name || "").toLowerCase().includes(search.toLowerCase())
-  );
-  const filteredMatches = matches.filter((m) =>
-    (profileMap[m.broker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase()) ||
-    (profileMap[m.trucker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase()) ||
-    (profileMap[m.vendor_id]?.company_name || "").toLowerCase().includes(search.toLowerCase())
-  );
-  const filteredMessages = messages.filter((m) =>
-    (m.text || "").toLowerCase().includes(search.toLowerCase()) ||
-    (profileMap[m.sender_id]?.company_name || "").toLowerCase().includes(search.toLowerCase())
-  );
-  const filteredPods = bolsWithPod.filter((b) =>
-    (b.bol_number || "").toLowerCase().includes(search.toLowerCase()) ||
-    (profileMap[b.trucker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase())
-  );
-  const filteredSuspended = profiles.filter((p) =>
-    p.is_suspended && (p.company_name || "").toLowerCase().includes(search.toLowerCase())
-  );
+    (b.bol_number ||
+     const securityAlertCount = auditEvents.filter((e) => e.event_type === "security").length;
 
-  const searchPlaceholders = {
-    overview: "Search by BOL number or company...",
-    users: "Search by company name...",
-    admins: "Search by company name...",
-    matches: "Search by broker, carrier, or vendor company...",
-    messages: "Search message text or sender...",
-    pods: "Search by BOL number or carrier...",
-    suspended: "Search suspended accounts...",
-  };
   return (
     <div className="min-h-screen bg-gray-100">
       <header className="bg-asphalt border-b-4 border-amberx">
@@ -214,6 +208,8 @@ export default function AdminPage() {
           <StatCard icon={<Handshake size={16} />} label="Pending Matches" value={pendingMatches} />
           <StatCard icon={<Camera size={16} />} label="PODs Uploaded" value={bolsWithPod.length} />
           <StatCard icon={<Ban size={16} />} label="Suspended Accounts" value={suspendedCount} highlight={suspendedCount > 0} />
+          <StatCard icon={<Activity size={16} />} label="Audit Events Logged" value={auditEvents.length} />
+          <StatCard icon={<Activity size={16} />} label="Security Alerts" value={securityAlertCount} highlight={securityAlertCount > 0} />
         </div>
 
         <div className="bg-white border border-gray-300 rounded-sm p-4">
@@ -264,6 +260,12 @@ export default function AdminPage() {
             className={`px-4 py-2 text-sm font-mono uppercase tracking-wide border-b-2 ${tab === "suspended" ? "border-amberx text-asphalt font-semibold" : "border-transparent text-gray-400"}`}
           >
             Suspended
+          </button>
+          <button
+            onClick={() => { setTab("audit"); setSearch(""); }}
+            className={`px-4 py-2 text-sm font-mono uppercase tracking-wide border-b-2 ${tab === "audit" ? "border-amberx text-asphalt font-semibold" : "border-transparent text-gray-400"}`}
+          >
+            Audit Events
           </button>
           <button
             onClick={() => { setTab("admins"); setSearch(""); }}
@@ -503,6 +505,99 @@ export default function AdminPage() {
                 )}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {tab === "audit" && (
+          <div className="space-y-4">
+            <div className="bg-white border border-gray-300 rounded-sm p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div>
+                <label className="text-gray-400 text-[10px] uppercase font-mono tracking-wide block mb-1">Date range</label>
+                <select
+                  value={auditDateRange}
+                  onChange={(e) => setAuditDateRange(e.target.value)}
+                  className="w-full border border-gray-300 rounded-sm px-2 py-1.5 text-xs"
+                >
+                  <option value="today">Today</option>
+                  <option value="week">Last 7 days</option>
+                  <option value="month">Last 30 days</option>
+                  <option value="all">All time</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-gray-400 text-[10px] uppercase font-mono tracking-wide block mb-1">User type</label>
+                <select
+                  value={auditUserType}
+                  onChange={(e) => setAuditUserType(e.target.value)}
+                  className="w-full border border-gray-300 rounded-sm px-2 py-1.5 text-xs"
+                >
+                  <option value="all">All</option>
+                  {USER_TYPE_OPTIONS.map((r) => (
+                    <option key={r} value={r}>{ROLE_DISPLAY[r]}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-gray-400 text-[10px] uppercase font-mono tracking-wide block mb-1">Event type</label>
+                <select
+                  value={auditEventType}
+                  onChange={(e) => setAuditEventType(e.target.value)}
+                  className="w-full border border-gray-300 rounded-sm px-2 py-1.5 text-xs"
+                >
+                  <option value="all">All</option>
+                  {EVENT_TYPE_OPTIONS.map((t) => (
+                    <option key={t} value={t} className="capitalize">{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-gray-400 text-[10px] uppercase font-mono tracking-wide block mb-1">Status</label>
+                <select
+                  value={auditStatus}
+                  onChange={(e) => setAuditStatus(e.target.value)}
+                  className="w-full border border-gray-300 rounded-sm px-2 py-1.5 text-xs"
+                >
+                  <option value="all">All</option>
+                  {STATUS_OPTIONS.map((s) => (
+                    <option key={s} value={s} className="capitalize">{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="bg-white border border-gray-300 rounded-sm overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200 text-left">
+                    <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Date & Time</th>
+                    <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">User</th>
+                    <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Company</th>
+                    <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Action</th>
+                    <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredAuditEvents.map((e) => (
+                    <tr key={e.id} className="border-b border-gray-100">
+                      <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{new Date(e.created_at).toLocaleString()}</td>
+                      <td className="px-3 py-2 text-xs">{ROLE_DISPLAY[e.actor_role] || e.actor_role || "—"}</td>
+                      <td className="px-3 py-2 text-xs">{e.company_name || "—"}</td>
+                      <td className="px-3 py-2 text-xs font-semibold">{e.action}</td>
+                      <td className="px-3 py-2 text-xs">
+                        {e.status === "success" && <span className="text-highway font-semibold">Success</span>}
+                        {e.status === "warning" && <span className="text-amberx font-semibold">Warning</span>}
+                        {e.status === "failed" && <span className="text-alertred font-semibold">Failed</span>}
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredAuditEvents.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-6 text-center text-gray-400 italic">No audit events found for this filter.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
