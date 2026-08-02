@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Shield, Users, FileText, Handshake, ArrowLeft, ShieldCheck, ShieldOff } from "lucide-react";
+import { Shield, Users, FileText, Handshake, ArrowLeft, ShieldCheck, ShieldOff, MessageSquare } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 
 const STATUS_LABELS = {
@@ -27,6 +27,7 @@ export default function AdminPage() {
   const [profiles, setProfiles] = useState([]);
   const [bols, setBols] = useState([]);
   const [matches, setMatches] = useState([]);
+  const [messages, setMessages] = useState([]);
   const [tab, setTab] = useState("overview");
   const [search, setSearch] = useState("");
   const [toggling, setToggling] = useState(null);
@@ -46,8 +47,16 @@ export default function AdminPage() {
 
     const { data: matchesData } = await supabase
       .from("matches")
-      .select("*");
+      .select("*")
+      .order("created_at", { ascending: false });
     setMatches(matchesData || []);
+
+    const { data: messagesData } = await supabase
+      .from("messages")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    setMessages(messagesData || []);
   }
 
   useEffect(() => {
@@ -122,6 +131,17 @@ export default function AdminPage() {
   const filteredAdminSearch = profiles.filter((p) =>
     (p.company_name || "").toLowerCase().includes(search.toLowerCase())
   );
+  const filteredMatches = matches.filter((m) =>
+    (profileMap[m.broker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase()) ||
+    (profileMap[m.trucker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase()) ||
+    (profileMap[m.vendor_id]?.company_name ||
+     const searchPlaceholders = {
+    overview: "Search by BOL number or company...",
+    users: "Search by company name...",
+    admins: "Search by company name...",
+    matches: "Search by broker, carrier, or vendor company...",
+    messages: "Search message text or sender...",
+  };
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -169,7 +189,7 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 border-b border-gray-300">
+        <div className="flex items-center gap-2 border-b border-gray-300 flex-wrap">
           <button
             onClick={() => { setTab("overview"); setSearch(""); }}
             className={`px-4 py-2 text-sm font-mono uppercase tracking-wide border-b-2 ${tab === "overview" ? "border-amberx text-asphalt font-semibold" : "border-transparent text-gray-400"}`}
@@ -183,6 +203,18 @@ export default function AdminPage() {
             All Users
           </button>
           <button
+            onClick={() => { setTab("matches"); setSearch(""); }}
+            className={`px-4 py-2 text-sm font-mono uppercase tracking-wide border-b-2 ${tab === "matches" ? "border-amberx text-asphalt font-semibold" : "border-transparent text-gray-400"}`}
+          >
+            All Matches
+          </button>
+          <button
+            onClick={() => { setTab("messages"); setSearch(""); }}
+            className={`px-4 py-2 text-sm font-mono uppercase tracking-wide border-b-2 ${tab === "messages" ? "border-amberx text-asphalt font-semibold" : "border-transparent text-gray-400"}`}
+          >
+            Messages
+          </button>
+          <button
             onClick={() => { setTab("admins"); setSearch(""); }}
             className={`px-4 py-2 text-sm font-mono uppercase tracking-wide border-b-2 ${tab === "admins" ? "border-amberx text-asphalt font-semibold" : "border-transparent text-gray-400"}`}
           >
@@ -193,7 +225,7 @@ export default function AdminPage() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder={tab === "overview" ? "Search by BOL number or company..." : "Search by company name..."}
+          placeholder={searchPlaceholders[tab]}
           className="w-full border border-gray-300 rounded-sm px-3 py-2 text-sm"
         />
 
@@ -282,6 +314,80 @@ export default function AdminPage() {
                 {filteredProfiles.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-3 py-6 text-center text-gray-400 italic">No users found.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {tab === "matches" && (
+          <div className="bg-white border border-gray-300 rounded-sm overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200 text-left">
+                  <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Broker</th>
+                  <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Carrier</th>
+                  <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Vendor</th>
+                  <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Status</th>
+                  <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredMatches.map((m) => (
+                  <tr key={m.id} className="border-b border-gray-100">
+                    <td className="px-3 py-2">{profileMap[m.broker_id]?.company_name || "—"}</td>
+                    <td className="px-3 py-2">{profileMap[m.trucker_id]?.company_name || "—"}</td>
+                    <td className="px-3 py-2">{profileMap[m.vendor_id]?.company_name || "—"}</td>
+                    <td className="px-3 py-2 text-xs font-semibold capitalize">{m.status}</td>
+                    <td className="px-3 py-2 text-xs text-gray-400">{new Date(m.created_at).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+                {filteredMatches.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-6 text-center text-gray-400 italic">No matches found.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {tab === "messages" && (
+          <div className="bg-white border border-gray-300 rounded-sm overflow-x-auto">
+            <div className="px-3 py-2.5 bg-amberx/10 border-b border-amberx/30 text-xs text-steelgray flex items-center gap-1.5">
+              <MessageSquare size={13} /> Showing the 200 most recent messages platform-wide.
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200 text-left">
+                  <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Sender</th>
+                  <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Message</th>
+                  <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Rate</th>
+                  <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Sent</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredMessages.map((m) => (
+                  <tr key={m.id} className="border-b border-gray-100">
+                    <td className="px-3 py-2 font-semibold">{profileMap[m.sender_id]?.company_name || "—"}</td>
+                    <td className="px-3 py-2 text-xs max-w-xs truncate">{m.text}</td>
+                    <td className="px-3 py-2 text-xs">{m.rate ? `$${m.rate}` : "—"}</td>
+                    <td className="px-3 py-2 text-xs text-gray-400">{new Date(m.created_at).toLocaleString()}</td>
+                    <td className="px-3 py-2">
+                      <Link
+                        href={`/dashboard?openMatch=${m.match_id}`}
+                        className="text-xs text-blue-600 underline"
+                      >
+                        Open thread
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+                {filteredMessages.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-6 text-center text-gray-400 italic">No messages found.</td>
                   </tr>
                 )}
               </tbody>
