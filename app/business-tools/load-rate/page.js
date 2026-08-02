@@ -12,8 +12,10 @@ export default function LoadRateCalculator() {
   const [profile, setProfile] = useState(null);
   const [history, setHistory] = useState([]);
 
+  const [inputMode, setInputMode] = useState("per_mile"); // "per_mile" or "total"
   const [miles, setMiles] = useState("");
-  const [totalRate, setTotalRate] = useState("");
+  const [ratePerMileInput, setRatePerMileInput] = useState("");
+  const [totalRateInput, setTotalRateInput] = useState("");
   const [expenses, setExpenses] = useState("");
   const [targetMargin, setTargetMargin] = useState("");
   const [result, setResult] = useState(null);
@@ -62,31 +64,48 @@ export default function LoadRateCalculator() {
   function handleCalculate(e) {
     e.preventDefault();
     const milesNum = parseFloat(miles);
-    const rateNum = parseFloat(totalRate);
     const expensesNum = parseFloat(expenses) || 0;
     const marginNum = parseFloat(targetMargin) || 0;
 
-    if (!milesNum || milesNum <= 0 || !rateNum || rateNum <= 0) {
-      setResult({ error: "Enter valid miles and total rate." });
+    if (!milesNum || milesNum <= 0) {
+      setResult({ error: "Enter valid total miles." });
       return;
     }
 
-    const ratePerMile = rateNum / milesNum;
-    const netProfit = rateNum - expensesNum;
-    const netMargin = (netProfit / rateNum) * 100;
+    let totalRate, ratePerMile;
+
+    if (inputMode === "per_mile") {
+      ratePerMile = parseFloat(ratePerMileInput);
+      if (!ratePerMile || ratePerMile <= 0) {
+        setResult({ error: "Enter a valid rate per mile." });
+        return;
+      }
+      totalRate = ratePerMile * milesNum;
+    } else {
+      totalRate = parseFloat(totalRateInput);
+      if (!totalRate || totalRate <= 0) {
+        setResult({ error: "Enter a valid total rate." });
+        return;
+      }
+      ratePerMile = totalRate / milesNum;
+    }
+
+    const netProfit = totalRate - expensesNum;
+    const netMargin = (netProfit / totalRate) * 100;
     const meetsTarget = marginNum > 0 ? netMargin >= marginNum : null;
     const breakEvenRate = expensesNum > 0 ? expensesNum / milesNum : null;
 
     const calcResult = {
       ratePerMile,
+      totalRate,
       netProfit,
       netMargin,
       meetsTarget,
       breakEvenRate,
       milesNum,
-      rateNum,
       expensesNum,
       marginNum,
+      inputMode,
     };
     setResult(calcResult);
     saveCalculation(calcResult);
@@ -100,12 +119,15 @@ export default function LoadRateCalculator() {
       calculator_type: "load_rate",
       inputs: {
         miles: calcResult.milesNum,
-        total_rate: calcResult.rateNum,
+        rate_per_mile: calcResult.ratePerMile,
+        total_rate: calcResult.totalRate,
         expenses: calcResult.expensesNum,
         target_margin: calcResult.marginNum,
+        input_mode: calcResult.inputMode,
       },
       result: {
         rate_per_mile: calcResult.ratePerMile,
+        total_rate: calcResult.totalRate,
         net_profit: calcResult.netProfit,
         net_margin: calcResult.netMargin,
         break_even_rate: calcResult.breakEvenRate,
@@ -134,6 +156,31 @@ export default function LoadRateCalculator() {
       </header>
       <main className="max-w-4xl mx-auto px-5 py-8">
         <form onSubmit={handleCalculate} className="bg-asphalt border-2 border-gray-700 rounded-lg p-6 mb-8">
+          <div className="flex gap-2 mb-5">
+            <button
+              type="button"
+              onClick={() => setInputMode("per_mile")}
+              className={`flex-1 text-xs font-mono uppercase tracking-wide py-2 rounded border ${
+                inputMode === "per_mile"
+                  ? "bg-amberx text-asphalt border-amberx font-bold"
+                  : "bg-black text-gray-400 border-gray-600"
+              }`}
+            >
+              I know the rate per mile
+            </button>
+            <button
+              type="button"
+              onClick={() => setInputMode("total")}
+              className={`flex-1 text-xs font-mono uppercase tracking-wide py-2 rounded border ${
+                inputMode === "total"
+                  ? "bg-amberx text-asphalt border-amberx font-bold"
+                  : "bg-black text-gray-400 border-gray-600"
+              }`}
+            >
+              I know the total rate
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
             <div>
               <label className="text-gray-400 text-xs uppercase font-mono tracking-wide block mb-1">Total miles</label>
@@ -143,22 +190,37 @@ export default function LoadRateCalculator() {
                 value={miles}
                 onChange={(e) => setMiles(e.target.value)}
                 className="w-full bg-black border border-gray-600 rounded px-3 py-2 text-white"
-                placeholder="e.g. 450"
+                placeholder="e.g. 1800"
                 required
               />
             </div>
-            <div>
-              <label className="text-gray-400 text-xs uppercase font-mono tracking-wide block mb-1">Total rate ($)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={totalRate}
-                onChange={(e) => setTotalRate(e.target.value)}
-                className="w-full bg-black border border-gray-600 rounded px-3 py-2 text-white"
-                placeholder="e.g. 1350"
-                required
-              />
-            </div>
+            {inputMode === "per_mile" ? (
+              <div>
+                <label className="text-gray-400 text-xs uppercase font-mono tracking-wide block mb-1">Rate per mile ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={ratePerMileInput}
+                  onChange={(e) => setRatePerMileInput(e.target.value)}
+                  className="w-full bg-black border border-gray-600 rounded px-3 py-2 text-white"
+                  placeholder="e.g. 2.65"
+                  required
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="text-gray-400 text-xs uppercase font-mono tracking-wide block mb-1">Total rate ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={totalRateInput}
+                  onChange={(e) => setTotalRateInput(e.target.value)}
+                  className="w-full bg-black border border-gray-600 rounded px-3 py-2 text-white"
+                  placeholder="e.g. 4770"
+                  required
+                />
+              </div>
+            )}
             <div>
               <label className="text-gray-400 text-xs uppercase font-mono tracking-wide block mb-1">Expenses ($, optional)</label>
               <input
@@ -167,7 +229,7 @@ export default function LoadRateCalculator() {
                 value={expenses}
                 onChange={(e) => setExpenses(e.target.value)}
                 className="w-full bg-black border border-gray-600 rounded px-3 py-2 text-white"
-                placeholder="fuel, tolls, etc."
+                placeholder="fuel, insurance, tolls, etc."
               />
             </div>
             <div>
@@ -197,13 +259,19 @@ export default function LoadRateCalculator() {
         {result && !result.error && (
           <div className="bg-asphalt border-2 border-amberx rounded-lg p-6 mb-8">
             <h2 className="text-white text-sm font-mono uppercase tracking-widest mb-4">Results</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
               <div>
-                <p className="text-gray-400 text-xs uppercase font-mono">Rate per mile</p>
-                <p className="text-amberx text-2xl font-bold">${result.ratePerMile.toFixed(2)}</p>
+                <p className="text-gray-400 text-xs uppercase font-mono">Total load value</p>
+                <p className="text-amberx text-2xl font-bold">${result.totalRate.toFixed(2)}</p>
               </div>
               <div>
-                <p className="text-gray-400 text-xs uppercase font-mono">Net profit</p>
+                <p className="text-gray-400 text-xs uppercase font-mono">Rate per mile</p>
+                <p className="text-white text-2xl font-bold">${result.ratePerMile.toFixed(2)}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-gray-700 pt-4">
+              <div>
+                <p className="text-gray-400 text-xs uppercase font-mono">What you actually make</p>
                 <p className="text-white text-2xl font-bold">${result.netProfit.toFixed(2)}</p>
               </div>
               <div>
@@ -232,7 +300,7 @@ export default function LoadRateCalculator() {
               {history.map((h) => (
                 <div key={h.id} className="bg-asphalt border border-gray-700 rounded p-3 flex items-center justify-between text-sm">
                   <span className="text-gray-400">
-                    {h.inputs.miles} mi · ${h.inputs.total_rate}
+                    {h.inputs.miles} mi · ${h.inputs.total_rate.toFixed(2)} total
                   </span>
                   <span className="text-amberx font-bold">${h.result.rate_per_mile.toFixed(2)}/mi</span>
                   <span className="text-gray-500 text-xs">{new Date(h.created_at).toLocaleDateString()}</span>
