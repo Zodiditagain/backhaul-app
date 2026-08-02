@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Truck, LogOut, Settings, Shield } from "lucide-react";
+import { Truck, LogOut, Settings, Shield, Calculator } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import TruckerDashboard from "../../components/TruckerDashboard";
 import MatchmakingDashboard from "../../components/MatchmakingDashboard";
@@ -42,6 +42,7 @@ export default function Dashboard() {
   if (loading) return <div className="p-8 text-steelgray">Loading...</div>;
   if (!profile) return <div className="p-8 text-alertred">Couldn't load your profile. Try logging in again.</div>;
   const isPartner = profile.role === "broker" || profile.role === "vendor";
+  const isTrucker = profile.role === "trucker";
   return (
     <div className="min-h-screen">
       <header className="bg-asphalt border-b-4 border-amberx">
@@ -63,6 +64,14 @@ export default function Dashboard() {
                 className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-mono uppercase tracking-wide px-2.5 py-1.5 rounded-sm"
               >
                 <Shield size={14} /> Admin
+              </Link>
+            )}
+            {isTrucker && (
+              <Link
+                href="/business-tools"
+                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
+              >
+                <Calculator size={14} /> Business Tools
               </Link>
             )}
             {isPartner && (
