@@ -12,10 +12,12 @@ export default function FuelCostCalculator() {
   const [profile, setProfile] = useState(null);
   const [history, setHistory] = useState([]);
 
+  const [inputMode, setInputMode] = useState("mpg"); // "mpg" or "cost_per_mile"
   const [loadedMiles, setLoadedMiles] = useState("");
   const [deadheadMiles, setDeadheadMiles] = useState("");
   const [mpg, setMpg] = useState("");
   const [fuelPrice, setFuelPrice] = useState("");
+  const [costPerMileInput, setCostPerMileInput] = useState("");
   const [result, setResult] = useState(null);
   const [saving, setSaving] = useState(false);
 
@@ -63,30 +65,50 @@ export default function FuelCostCalculator() {
     e.preventDefault();
     const loadedNum = parseFloat(loadedMiles);
     const deadheadNum = parseFloat(deadheadMiles) || 0;
-    const mpgNum = parseFloat(mpg);
-    const priceNum = parseFloat(fuelPrice);
 
-    if (!loadedNum || loadedNum <= 0 || !mpgNum || mpgNum <= 0 || !priceNum || priceNum <= 0) {
-      setResult({ error: "Enter valid loaded miles, MPG, and fuel price." });
+    if (!loadedNum || loadedNum <= 0) {
+      setResult({ error: "Enter valid loaded miles." });
       return;
     }
 
     const totalMiles = loadedNum + deadheadNum;
-    const gallonsNeeded = totalMiles / mpgNum;
-    const totalFuelCost = gallonsNeeded * priceNum;
+    let totalFuelCost, gallonsNeeded, mpgNum, priceNum, costPerMile;
+
+    if (inputMode === "mpg") {
+      mpgNum = parseFloat(mpg);
+      priceNum = parseFloat(fuelPrice);
+      if (!mpgNum || mpgNum <= 0 || !priceNum || priceNum <= 0) {
+        setResult({ error: "Enter valid MPG and fuel price." });
+        return;
+      }
+      gallonsNeeded = totalMiles / mpgNum;
+      totalFuelCost = gallonsNeeded * priceNum;
+      costPerMile = totalFuelCost / totalMiles;
+    } else {
+      costPerMile = parseFloat(costPerMileInput);
+      if (!costPerMile || costPerMile <= 0) {
+        setResult({ error: "Enter a valid fuel cost per mile." });
+        return;
+      }
+      totalFuelCost = costPerMile * totalMiles;
+      gallonsNeeded = null;
+      mpgNum = null;
+      priceNum = null;
+    }
+
     const costPerLoadedMile = totalFuelCost / loadedNum;
-    const costPerTotalMile = totalFuelCost / totalMiles;
 
     const calcResult = {
       totalMiles,
       gallonsNeeded,
       totalFuelCost,
       costPerLoadedMile,
-      costPerTotalMile,
+      costPerTotalMile: costPerMile,
       loadedNum,
       deadheadNum,
       mpgNum,
       priceNum,
+      inputMode,
     };
     setResult(calcResult);
     saveCalculation(calcResult);
@@ -103,6 +125,7 @@ export default function FuelCostCalculator() {
         deadhead_miles: calcResult.deadheadNum,
         mpg: calcResult.mpgNum,
         fuel_price: calcResult.priceNum,
+        input_mode: calcResult.inputMode,
       },
       result: {
         total_fuel_cost: calcResult.totalFuelCost,
@@ -134,6 +157,31 @@ export default function FuelCostCalculator() {
       </header>
       <main className="max-w-4xl mx-auto px-5 py-8">
         <form onSubmit={handleCalculate} className="bg-asphalt border-2 border-gray-700 rounded-lg p-6 mb-8">
+          <div className="flex gap-2 mb-5">
+            <button
+              type="button"
+              onClick={() => setInputMode("mpg")}
+              className={`flex-1 text-xs font-mono uppercase tracking-wide py-2 rounded border ${
+                inputMode === "mpg"
+                  ? "bg-amberx text-asphalt border-amberx font-bold"
+                  : "bg-black text-gray-400 border-gray-600"
+              }`}
+            >
+              I know MPG + fuel price
+            </button>
+            <button
+              type="button"
+              onClick={() => setInputMode("cost_per_mile")}
+              className={`flex-1 text-xs font-mono uppercase tracking-wide py-2 rounded border ${
+                inputMode === "cost_per_mile"
+                  ? "bg-amberx text-asphalt border-amberx font-bold"
+                  : "bg-black text-gray-400 border-gray-600"
+              }`}
+            >
+              I know my cost per mile
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
             <div>
               <label className="text-gray-400 text-xs uppercase font-mono tracking-wide block mb-1">Loaded miles</label>
@@ -158,30 +206,47 @@ export default function FuelCostCalculator() {
                 placeholder="e.g. 50"
               />
             </div>
-            <div>
-              <label className="text-gray-400 text-xs uppercase font-mono tracking-wide block mb-1">Truck MPG</label>
-              <input
-                type="number"
-                step="0.1"
-                value={mpg}
-                onChange={(e) => setMpg(e.target.value)}
-                className="w-full bg-black border border-gray-600 rounded px-3 py-2 text-white"
-                placeholder="e.g. 6.5"
-                required
-              />
-            </div>
-            <div>
-              <label className="text-gray-400 text-xs uppercase font-mono tracking-wide block mb-1">Fuel price ($/gal)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={fuelPrice}
-                onChange={(e) => setFuelPrice(e.target.value)}
-                className="w-full bg-black border border-gray-600 rounded px-3 py-2 text-white"
-                placeholder="e.g. 3.85"
-                required
-              />
-            </div>
+            {inputMode === "mpg" ? (
+              <>
+                <div>
+                  <label className="text-gray-400 text-xs uppercase font-mono tracking-wide block mb-1">Truck MPG</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={mpg}
+                    onChange={(e) => setMpg(e.target.value)}
+                    className="w-full bg-black border border-gray-600 rounded px-3 py-2 text-white"
+                    placeholder="e.g. 6.5"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-xs uppercase font-mono tracking-wide block mb-1">Fuel price ($/gal)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={fuelPrice}
+                    onChange={(e) => setFuelPrice(e.target.value)}
+                    className="w-full bg-black border border-gray-600 rounded px-3 py-2 text-white"
+                    placeholder="e.g. 3.85"
+                    required
+                  />
+                </div>
+              </>
+            ) : (
+              <div>
+                <label className="text-gray-400 text-xs uppercase font-mono tracking-wide block mb-1">Fuel cost per mile ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={costPerMileInput}
+                  onChange={(e) => setCostPerMileInput(e.target.value)}
+                  className="w-full bg-black border border-gray-600 rounded px-3 py-2 text-white"
+                  placeholder="e.g. 0.59"
+                  required
+                />
+              </div>
+            )}
           </div>
           <button
             type="submit"
@@ -203,10 +268,12 @@ export default function FuelCostCalculator() {
                 <p className="text-gray-400 text-xs uppercase font-mono">Total fuel cost</p>
                 <p className="text-amberx text-2xl font-bold">${result.totalFuelCost.toFixed(2)}</p>
               </div>
-              <div>
-                <p className="text-gray-400 text-xs uppercase font-mono">Gallons needed</p>
-                <p className="text-white text-2xl font-bold">{result.gallonsNeeded.toFixed(1)}</p>
-              </div>
+              {result.gallonsNeeded !== null && (
+                <div>
+                  <p className="text-gray-400 text-xs uppercase font-mono">Gallons needed</p>
+                  <p className="text-white text-2xl font-bold">{result.gallonsNeeded.toFixed(1)}</p>
+                </div>
+              )}
               <div>
                 <p className="text-gray-400 text-xs uppercase font-mono">Cost / loaded mile</p>
                 <p className="text-white text-2xl font-bold">${result.costPerLoadedMile.toFixed(2)}</p>
@@ -228,7 +295,7 @@ export default function FuelCostCalculator() {
               {history.map((h) => (
                 <div key={h.id} className="bg-asphalt border border-gray-700 rounded p-3 flex items-center justify-between text-sm">
                   <span className="text-gray-400">
-                    {h.inputs.loaded_miles} mi · {h.inputs.mpg} mpg · ${h.inputs.fuel_price}/gal
+                    {h.inputs.loaded_miles} mi{h.inputs.mpg ? ` · ${h.inputs.mpg} mpg · $${h.inputs.fuel_price}/gal` : ""}
                   </span>
                   <span className="text-amberx font-bold">${h.result.total_fuel_cost.toFixed(2)}</span>
                   <span className="text-gray-500 text-xs">{new Date(h.created_at).toLocaleDateString()}</span>
