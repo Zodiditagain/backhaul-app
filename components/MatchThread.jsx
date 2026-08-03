@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Send, Star, CheckCircle2, FileText, X, Upload, Camera, Paperclip, Clock } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
+import { logAuditEvent } from "../lib/auditLog";
 import BolForm from "./BolForm";
 
 const STATUS_LABELS = {
@@ -403,6 +404,7 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
 
   const [auditLog, setAuditLog] = useState([]);
   const [auditNames, setAuditNames] = useState({});
+  const [companyName, setCompanyName] = useState("");
 
   const isTrucker = role === "trucker";
   const isBroker = role === "broker";
@@ -440,10 +442,30 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
         setAuditNames(nameMap);
       }
     }
+    async function loadMyCompany() {
+      const { data } = await supabase
+        .from("profiles")
+        .select("company_name")
+        .eq("id", user.id)
+        .single();
+      const myCompanyName = data?.company_name || "";
+      setCompanyName(myCompanyName);
+      await logAuditEvent({
+        actorId: user.id,
+        actorRole: role,
+        companyName: myCompanyName,
+        eventType: "bol",
+        action: "Viewed BOL",
+        bolId: bol.id,
+        matchId: match.id,
+        metadata: { bol_number: bol.bol_number },
+      });
+    }
     loadItems();
     loadAudit();
+    loadMyCompany();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bol.id]);
-
   async function updateBol(fields, messageText, auditAction, auditDetails, notifTitle, notifMessage) {
     setError("");
     setSaving(true);
@@ -478,6 +500,16 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
       setError("Enter the assigned driver's name before accepting.");
       return;
     }
+    await logAuditEvent({
+      actorId: user.id,
+      actorRole: role,
+      companyName,
+      eventType: "bol",
+      action: "Accepted BOL",
+      bolId: bol.id,
+      matchId: match.id,
+      metadata: { bol_number: bol.bol_number, driver_name: driverName },
+    });
     await updateBol(
       {
         driver_name: driverName,
@@ -590,6 +622,16 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
   }
 
   async function markCompleted() {
+    await logAuditEvent({
+      actorId: user.id,
+      actorRole: role,
+      companyName,
+      eventType: "bol",
+      action: "Marked Completed",
+      bolId: bol.id,
+      matchId: match.id,
+      metadata: { bol_number: bol.bol_number },
+    });
     await updateBol(
       { status: "completed" },
       `🎉 BOL ${bol.bol_number} marked completed.`,
@@ -642,6 +684,16 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
     });
 
     await logAudit(bol.id, user.id, "pod_uploaded", file.name);
+    await logAuditEvent({
+      actorId: user.id,
+      actorRole: role,
+      companyName,
+      eventType: "bol",
+      action: "Uploaded POD",
+      bolId: bol.id,
+      matchId: match.id,
+      metadata: { bol_number: bol.bol_number, file_name: file.name },
+    });
     await notify(otherPartyId, match.id, bol.id, "Proof of delivery uploaded", `${bol.bol_number} — POD is now available.`);
 
     setPodUrl(urlData.publicUrl);
@@ -915,12 +967,7 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
               <h3 className="text-sm font-bold uppercase tracking-wide text-asphalt mb-3">Proof of Delivery</h3>
 
               {podUrl && (
-                <a
-                  href={podUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-sm text-blue-600 underline mb-3"
-                >
+                <a href={podUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-blue-600 underline mb-3">
                   <Paperclip size={14} /> View uploaded POD
                   {podUploadedAt && (
                     <span className="text-xs text-gray-400 no-underline">
