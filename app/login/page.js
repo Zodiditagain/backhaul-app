@@ -24,8 +24,7 @@ export default function Login() {
 
     if ((failedCount || 0) >= MAX_ATTEMPTS) {
       setLoading(false);
-      setError("Too many failed attempts. Please contact an admin to reset your password.");
-      await logAuditEvent({
+     setError("Too many failed attempts. Please call 1-615-807-6971 to reset your password.");      await logAuditEvent({
         actorId: null,
         actorRole: null,
         companyName: null,
