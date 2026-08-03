@@ -6,6 +6,8 @@ import { Truck } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import { logAuditEvent } from "../../lib/auditLog";
 
+const MAX_ATTEMPTS = 5;
+
 export default function Login() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -17,6 +19,24 @@ export default function Login() {
     e.preventDefault();
     setError("");
     setLoading(true);
+
+    const { data: failedCount } = await supabase.rpc("count_recent_failed_logins", { p_email: email });
+
+    if ((failedCount || 0) >= MAX_ATTEMPTS) {
+      setLoading(false);
+      setError("Too many failed attempts. Please contact an admin to reset your password.");
+      await logAuditEvent({
+        actorId: null,
+        actorRole: null,
+        companyName: null,
+        eventType: "security",
+        action: "Account Locked",
+        status: "failed",
+        metadata: { email, reason: "Exceeded failed login threshold" },
+      });
+      return;
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       setError(error.message);
