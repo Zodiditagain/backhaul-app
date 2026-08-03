@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Shield, Users, FileText, Handshake, ArrowLeft, ShieldCheck, ShieldOff, MessageSquare, Camera, Ban, CheckCircle2, Activity, KeyRound } from "lucide-react";
+import { Shield, Users, FileText, Handshake, ArrowLeft, ShieldCheck, ShieldOff, MessageSquare, Camera, Ban, CheckCircle2, Activity, KeyRound, Bell } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 
 const STATUS_LABELS = {
@@ -46,6 +46,8 @@ export default function AdminPage() {
   const [suspending, setSuspending] = useState(null);
   const [resettingPw, setResettingPw] = useState(null);
   const [resetMessage, setResetMessage] = useState("");
+  const [reminding, setReminding] = useState(null);
+  const [remindedIds, setRemindedIds] = useState([]);
 
   const [auditDateRange, setAuditDateRange] = useState("week");
   const [auditUserType, setAuditUserType] = useState("all");
@@ -174,6 +176,30 @@ export default function AdminPage() {
       });
     }
     setResettingPw(null);
+  }
+
+  async function sendProfileReminder(profileId, companyName) {
+    setReminding(profileId);
+    const { error } = await supabase.from("notifications").insert({
+      user_id: profileId,
+      match_id: null,
+      bol_id: null,
+      title: "Complete your profile",
+      message: "Finish setting up your profile so brokers, vendors, and carriers can find and match with you on Backhaul.",
+    });
+    if (!error) {
+      setRemindedIds((prev) => [...prev, profileId]);
+      await supabase.from("audit_events").insert({
+        actor_id: currentUserId,
+        actor_role: "admin",
+        company_name: companyName,
+        event_type: "admin",
+        action: "Sent Profile Reminder",
+        status: "success",
+        target_user_id: profileId,
+      });
+    }
+    setReminding(null);
   }
 
   if (loading) return <div className="p-8 text-steelgray">Loading admin console...</div>;
@@ -420,9 +446,27 @@ export default function AdminPage() {
 
         {tab === "users" && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <UserColumn title="Truckers" profiles={truckerProfiles} />
-            <UserColumn title="Brokers" profiles={brokerProfiles} />
-            <UserColumn title="Vendors" profiles={vendorProfiles} />
+            <UserColumn
+              title="Truckers"
+              profiles={truckerProfiles}
+              onSendReminder={sendProfileReminder}
+              reminding={reminding}
+              remindedIds={remindedIds}
+            />
+            <UserColumn
+              title="Brokers"
+              profiles={brokerProfiles}
+              onSendReminder={sendProfileReminder}
+              reminding={reminding}
+              remindedIds={remindedIds}
+            />
+            <UserColumn
+              title="Vendors"
+              profiles={vendorProfiles}
+              onSendReminder={sendProfileReminder}
+              reminding={reminding}
+              remindedIds={remindedIds}
+            />
           </div>
         )}
 
@@ -754,7 +798,7 @@ export default function AdminPage() {
   );
 }
 
-function UserColumn({ title, profiles }) {
+function UserColumn({ title, profiles, onSendReminder, reminding, remindedIds }) {
   return (
     <div className="bg-white border border-gray-300 rounded-sm overflow-hidden">
       <div className="bg-gray-50 border-b border-gray-200 px-3 py-2">
@@ -779,6 +823,16 @@ function UserColumn({ title, profiles }) {
               )}
               <span className="text-[10px] text-gray-400">— {new Date(p.created_at).toLocaleDateString()}</span>
             </div>
+            {!p.onboarding_completed && (
+              <button
+                onClick={() => onSendReminder(p.id, p.company_name)}
+                disabled={reminding === p.id || remindedIds.includes(p.id)}
+                className="mt-2 flex items-center gap-1 text-[10px] uppercase tracking-wide rounded-sm px-2 py-1 font-mono border border-amberx text-amberx hover:bg-amberx/10 disabled:opacity-50 disabled:cursor-default"
+              >
+                <Bell size={11} />
+                {remindedIds.includes(p.id) ? "Reminder Sent" : reminding === p.id ? "Sending..." : "Send Reminder"}
+              </button>
+            )}
           </div>
         ))}
         {profiles.length === 0 && (
