@@ -637,9 +637,8 @@ export default function AdminPage() {
                   {filteredAuditEvents.map((e) => (
                     <tr key={e.id} className="border-b border-gray-100">
                       <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{new Date(e.created_at).toLocaleString()}</td>
-                      <td className="px-3 py-2 text-xs">{ROLE_DISPLAY[e.actor_role] || e.actor_role || "—"}</td>
-                      <td className="px-3 py-2 text-xs">{e.company_name || "—"}</td>
-                      <td className="px-3 py-2 text-xs font-semibold">{e.action}</td>
+                      <td className="px-3 py-2 text-xs">{ROLE_DISPLAY[e.actor_role] || e.actor_role || (e.metadata?.email ? "Unknown" : "—")}</td>
+                      <td className="px-3 py-2 text-xs">{e.company_name || e.metadata?.email || "—"}</td>                      <td className="px-3 py-2 text-xs font-semibold">{e.action}</td>
                       <td className="px-3 py-2 text-xs">
                         {e.status === "success" && <span className="text-highway font-semibold">Success</span>}
                         {e.status === "warning" && <span className="text-amberx font-semibold">Warning</span>}
