@@ -198,14 +198,16 @@ export default function AdminPage() {
 
   const bolsWithPod = bols.filter((b) => b.pod_url);
 
- const ROLE_SORT_ORDER = { trucker: 0, broker: 1, vendor: 2 };
-  const filteredProfiles = profiles
-    .filter((p) => (p.company_name || "").toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => {
-      const roleDiff = (ROLE_SORT_ORDER[a.role] ?? 99) - (ROLE_SORT_ORDER[b.role] ?? 99);
-      if (roleDiff !== 0) return roleDiff;
-      return (a.company_name || "").localeCompare(b.company_name || "");
-    });  const filteredBols = bols.filter((b) =>
+  function filterAndSortByRole(roleName) {
+    return profiles
+      .filter((p) => p.role === roleName && (p.company_name || "").toLowerCase().includes(search.toLowerCase()))
+      .sort((a, b) => (a.company_name || "").localeCompare(b.company_name || ""));
+  }
+  const truckerProfiles = filterAndSortByRole("trucker");
+  const brokerProfiles = filterAndSortByRole("broker");
+  const vendorProfiles = filterAndSortByRole("vendor");
+
+  const filteredBols = bols.filter((b) =>
     (b.bol_number || "").toLowerCase().includes(search.toLowerCase()) ||
     (profileMap[b.broker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase()) ||
     (profileMap[b.trucker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase())
@@ -417,46 +419,10 @@ export default function AdminPage() {
         )}
 
         {tab === "users" && (
-          <div className="bg-white border border-gray-300 rounded-sm overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200 text-left">
-                  <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Company</th>
-                  <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Role</th>
-                  <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Onboarding</th>
-                  <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Joined</th>
-                  <th className="px-3 py-2"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredProfiles.map((p) => (
-                  <tr key={p.id} className="border-b border-gray-100">
-                    <td className="px-3 py-2 font-semibold">
-                      {p.company_name}
-                      {p.is_admin && <span className="ml-1.5 text-[10px] bg-amberx text-asphalt px-1.5 py-0.5 rounded-sm font-mono">ADMIN</span>}
-                      {p.is_suspended && <span className="ml-1.5 text-[10px] bg-alertred text-white px-1.5 py-0.5 rounded-sm font-mono">SUSPENDED</span>}
-                    </td>
-                    <td className="px-3 py-2 capitalize text-xs">{p.role}</td>
-                    <td className="px-3 py-2 text-xs">
-                      {p.onboarding_completed ? (
-                        <span className="text-highway">Complete</span>
-                      ) : (
-                        <span className="text-alertred">Incomplete</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-xs text-gray-400">{new Date(p.created_at).toLocaleDateString()}</td>
-                    <td className="px-3 py-2">
-                      <Link href={`/company/${p.id}`} className="text-xs text-blue-600 underline">View Profile</Link>
-                    </td>
-                  </tr>
-                ))}
-                {filteredProfiles.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-3 py-6 text-center text-gray-400 italic">No users found.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <UserColumn title="Truckers" profiles={truckerProfiles} />
+            <UserColumn title="Brokers" profiles={brokerProfiles} />
+            <UserColumn title="Vendors" profiles={vendorProfiles} />
           </div>
         )}
 
@@ -784,6 +750,41 @@ export default function AdminPage() {
           </div>
         )}
       </main>
+    </div>
+  );
+}
+
+function UserColumn({ title, profiles }) {
+  return (
+    <div className="bg-white border border-gray-300 rounded-sm overflow-hidden">
+      <div className="bg-gray-50 border-b border-gray-200 px-3 py-2">
+        <h3 className="text-xs font-bold uppercase tracking-wide text-steelgray">
+          {title} <span className="text-gray-400 font-normal">({profiles.length})</span>
+        </h3>
+      </div>
+      <div className="divide-y divide-gray-100 max-h-[600px] overflow-y-auto">
+        {profiles.map((p) => (
+          <div key={p.id} className="px-3 py-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold truncate">{p.company_name}</span>
+              <Link href={`/company/${p.id}`} className="text-[11px] text-blue-600 underline shrink-0">View</Link>
+            </div>
+            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+              {p.is_admin && <span className="text-[9px] bg-amberx text-asphalt px-1.5 py-0.5 rounded-sm font-mono">ADMIN</span>}
+              {p.is_suspended && <span className="text-[9px] bg-alertred text-white px-1.5 py-0.5 rounded-sm font-mono">SUSPENDED</span>}
+              {p.onboarding_completed ? (
+                <span className="text-[10px] text-highway">Complete</span>
+              ) : (
+                <span className="text-[10px] text-alertred">Incomplete</span>
+              )}
+              <span className="text-[10px] text-gray-400">— {new Date(p.created_at).toLocaleDateString()}</span>
+            </div>
+          </div>
+        ))}
+        {profiles.length === 0 && (
+          <p className="px-3 py-6 text-center text-gray-400 italic text-xs">No {title.toLowerCase()} found.</p>
+        )}
+      </div>
     </div>
   );
 }
