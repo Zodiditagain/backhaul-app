@@ -210,8 +210,7 @@ export default function MatchmakingDashboard({ user, role }) {
               <span className="text-xs uppercase tracking-widest text-gray-400 font-mono block mb-2">
                 Carriers Matched
               </span>
-              <div className="text-3xl font-bold text-white leading-none">{thisMonthCount}</div>
-            </div>
+             <div className="text-3xl font-bold text-white leading-none">{acceptedMatches.length}</div>            </div>
             <div className="w-6 h-6 rotate-45 bg-amberx flex items-center justify-center">
               <Handshake size={14} className="-rotate-45 text-asphalt" />
             </div>
