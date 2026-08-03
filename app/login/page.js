@@ -4,39 +4,61 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Truck } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
+import { logAuditEvent } from "../../lib/auditLog";
+
 export default function Login() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
- async function handleSubmit(e) {
-  e.preventDefault();
-  setError("");
-  setLoading(true);
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) {
-    setError(error.message);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+      await logAuditEvent({
+        actorId: null,
+        actorRole: null,
+        companyName: null,
+        eventType: "security",
+        action: "Failed Login",
+        status: "failed",
+        metadata: { email, reason: error.message },
+      });
+      return;
+    }
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role, onboarding_completed, company_name")
+      .eq("id", data.user.id)
+      .single();
+
+    await logAuditEvent({
+      actorId: data.user.id,
+      actorRole: profile?.role || null,
+      companyName: profile?.company_name || null,
+      eventType: "login",
+      action: "Login",
+      status: "success",
+    });
+
     setLoading(false);
-    return;
+    if (profile?.role === "trucker" && !profile.onboarding_completed) {
+      router.push("/onboarding");
+    } else if ((profile?.role === "broker" || profile?.role === "vendor") && !profile.onboarding_completed) {
+      router.push("/onboarding-partner");
+    } else {
+      router.push("/dashboard");
+    }
   }
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, onboarding_completed")
-    .eq("id", data.user.id)
-    .single();
-  setLoading(false);
-  if (profile?.role === "trucker" && !profile.onboarding_completed) {
-    router.push("/onboarding");
-  } else if ((profile?.role === "broker" || profile?.role === "vendor") && !profile.onboarding_completed) {
-    router.push("/onboarding-partner");
-  } else {
-    router.push("/dashboard");
-  }
-}
+
   return (
     <div className="min-h-screen relative flex flex-col items-center px-6 py-10 text-center overflow-hidden">
-      {/* Background photo */}
       <div
         className="absolute inset-0 bg-cover bg-center"
         style={{
@@ -45,9 +67,7 @@ export default function Login() {
         }}
       />
       <div className="absolute inset-0 bg-slate-950/85" />
-      {/* Content */}
       <div className="relative z-10 flex flex-col items-center w-full">
-        {/* Logo */}
         <div className="flex items-center gap-3 mb-8">
           <div className="w-10 h-10 rotate-45 bg-blue-600 flex items-center justify-center rounded-md">
             <Truck className="-rotate-45" size={22} color="#ffffff" />
