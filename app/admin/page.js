@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Shield, Users, FileText, Handshake, ArrowLeft, ShieldCheck, ShieldOff, MessageSquare, Camera, Ban, CheckCircle2, Activity } from "lucide-react";
+import { Shield, Users, FileText, Handshake, ArrowLeft, ShieldCheck, ShieldOff, MessageSquare, Camera, Ban, CheckCircle2, Activity, KeyRound } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 
 const STATUS_LABELS = {
@@ -44,6 +44,8 @@ export default function AdminPage() {
   const [search, setSearch] = useState("");
   const [toggling, setToggling] = useState(null);
   const [suspending, setSuspending] = useState(null);
+  const [resettingPw, setResettingPw] = useState(null);
+  const [resetMessage, setResetMessage] = useState("");
 
   const [auditDateRange, setAuditDateRange] = useState("week");
   const [auditUserType, setAuditUserType] = useState("all");
@@ -143,6 +145,35 @@ export default function AdminPage() {
       setProfiles((prev) => prev.map((p) => (p.id === profileId ? { ...p, is_suspended: !currentValue } : p)));
     }
     setSuspending(null);
+  }
+
+  async function resetPassword(profileId, companyName) {
+    setResetMessage("");
+    setResettingPw(profileId);
+    const { data: email, error: emailError } = await supabase.rpc("get_user_email", { p_user_id: profileId });
+    if (emailError || !email) {
+      setResetMessage(`Could not find an email for ${companyName}.`);
+      setResettingPw(null);
+      return;
+    }
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (resetError) {
+      setResetMessage(`Failed to send reset email: ${resetError.message}`);
+    } else {
+      setResetMessage(`Password reset email sent to ${companyName}.`);
+      await supabase.from("audit_events").insert({
+        actor_id: currentUserId,
+        actor_role: "admin",
+        company_name: companyName,
+        event_type: "admin",
+        action: "Sent Password Reset",
+        status: "success",
+        target_user_id: profileId,
+      });
+    }
+    setResettingPw(null);
   }
 
   if (loading) return <div className="p-8 text-steelgray">Loading admin console...</div>;
@@ -603,7 +634,7 @@ export default function AdminPage() {
                 >
                   <option value="all">All</option>
                   {EVENT_TYPE_OPTIONS.map((t) => (
-                    <option key={t} value={t} className="capitalize">{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                    <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
                   ))}
                 </select>
               </div>
@@ -616,7 +647,7 @@ export default function AdminPage() {
                 >
                   <option value="all">All</option>
                   {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s} className="capitalize">{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                    <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
                   ))}
                 </select>
               </div>
@@ -638,7 +669,8 @@ export default function AdminPage() {
                     <tr key={e.id} className="border-b border-gray-100">
                       <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{new Date(e.created_at).toLocaleString()}</td>
                       <td className="px-3 py-2 text-xs">{ROLE_DISPLAY[e.actor_role] || e.actor_role || (e.metadata?.email ? "Unknown" : "—")}</td>
-                      <td className="px-3 py-2 text-xs">{e.company_name || e.metadata?.email || "—"}</td>                      <td className="px-3 py-2 text-xs font-semibold">{e.action}</td>
+                      <td className="px-3 py-2 text-xs">{e.company_name || e.metadata?.email || "—"}</td>
+                      <td className="px-3 py-2 text-xs font-semibold">{e.action}</td>
                       <td className="px-3 py-2 text-xs">
                         {e.status === "success" && <span className="text-highway font-semibold">Success</span>}
                         {e.status === "warning" && <span className="text-amberx font-semibold">Warning</span>}
@@ -660,8 +692,13 @@ export default function AdminPage() {
         {tab === "admins" && (
           <div className="bg-white border border-gray-300 rounded-sm overflow-x-auto">
             <div className="px-3 py-2.5 bg-amberx/10 border-b border-amberx/30 text-xs text-steelgray">
-              Toggle admin access or suspend accounts here.
+              Toggle admin access, suspend accounts, or reset a password here.
             </div>
+            {resetMessage && (
+              <div className="px-3 py-2.5 bg-blue-50 border-b border-blue-200 text-xs text-blue-800">
+                {resetMessage}
+              </div>
+            )}
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-left">
@@ -669,6 +706,7 @@ export default function AdminPage() {
                   <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Role</th>
                   <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Admin Status</th>
                   <th className="px-3 py-2 font-mono text-xs uppercase tracking-wide text-gray-400">Account Status</th>
+                  <th className="px-3 py-2"></th>
                   <th className="px-3 py-2"></th>
                   <th className="px-3 py-2"></th>
                 </tr>
@@ -721,11 +759,20 @@ export default function AdminPage() {
                         {suspending === p.id ? "..." : p.is_suspended ? "Unsuspend" : "Suspend"}
                       </button>
                     </td>
+                    <td className="px-3 py-2">
+                      <button
+                        onClick={() => resetPassword(p.id, p.company_name)}
+                        disabled={resettingPw === p.id}
+                        className="text-[11px] uppercase tracking-wide rounded-sm px-2.5 py-1.5 font-mono disabled:opacity-50 border border-blue-600 text-blue-600 hover:bg-blue-50 flex items-center gap-1"
+                      >
+                        <KeyRound size={12} /> {resettingPw === p.id ? "..." : "Reset Password"}
+                      </button>
+                    </td>
                   </tr>
                 ))}
                 {filteredAdminSearch.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-3 py-6 text-center text-gray-400 italic">No users found.</td>
+                    <td colSpan={7} className="px-3 py-6 text-center text-gray-400 italic">No users found.</td>
                   </tr>
                 )}
               </tbody>
@@ -743,10 +790,11 @@ function StatCard({ icon, label, value, highlight }) {
     <div
       className="rounded-sm p-4 flex flex-col gap-2"
       style={{ backgroundColor: isHighlighted ? "#DC2626" : "#1B1E21" }}
-    >      <div className="flex items-center justify-between">
+    >
+      <div className="flex items-center justify-between">
         <span className="text-xs uppercase tracking-widest text-gray-300 font-mono">{label}</span>
-        <div className={`w-6 h-6 rotate-45 flex items-center justify-center ${highlight && value > 0 ? "bg-white" : "bg-amberx"}`}>
-          <span className={`-rotate-45 ${highlight && value > 0 ? "text-alertred" : "text-asphalt"}`}>{icon}</span>
+        <div className={`w-6 h-6 rotate-45 flex items-center justify-center ${isHighlighted ? "bg-white" : "bg-amberx"}`}>
+          <span className={`-rotate-45 ${isHighlighted ? "text-alertred" : "text-asphalt"}`}>{icon}</span>
         </div>
       </div>
       <span className="text-2xl font-bold text-white">{value}</span>
