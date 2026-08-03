@@ -198,10 +198,14 @@ export default function AdminPage() {
 
   const bolsWithPod = bols.filter((b) => b.pod_url);
 
-  const filteredProfiles = profiles.filter((p) =>
-    (p.company_name || "").toLowerCase().includes(search.toLowerCase())
-  );
-  const filteredBols = bols.filter((b) =>
+ const ROLE_SORT_ORDER = { trucker: 0, broker: 1, vendor: 2 };
+  const filteredProfiles = profiles
+    .filter((p) => (p.company_name || "").toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => {
+      const roleDiff = (ROLE_SORT_ORDER[a.role] ?? 99) - (ROLE_SORT_ORDER[b.role] ?? 99);
+      if (roleDiff !== 0) return roleDiff;
+      return (a.company_name || "").localeCompare(b.company_name || "");
+    });  const filteredBols = bols.filter((b) =>
     (b.bol_number || "").toLowerCase().includes(search.toLowerCase()) ||
     (profileMap[b.broker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase()) ||
     (profileMap[b.trucker_id]?.company_name || "").toLowerCase().includes(search.toLowerCase())
