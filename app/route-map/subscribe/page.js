@@ -1,11 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Truck, Check, X } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
 
-export default function RouteMapSubscribe() {
+function RouteMapSubscribeInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -152,5 +152,13 @@ export default function RouteMapSubscribe() {
         </p>
       </main>
     </div>
+  );
+}
+
+export default function RouteMapSubscribe() {
+  return (
+    <Suspense fallback={<div className="p-8 text-steelgray">Loading...</div>}>
+      <RouteMapSubscribeInner />
+    </Suspense>
   );
 }
