@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { MessageCircle, Handshake, Fuel, Building2, Package as PackageIcon, Check, X } from "lucide-react";
+import { MessageCircle, Handshake, Fuel, Building2, Package as PackageIcon, Check, X, Truck } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import GradeBadge, { computeStats } from "./GradeBadge";
 import MatchThread from "./MatchThread";
@@ -38,17 +38,25 @@ export default function TruckerDashboard({ user }) {
     insuranceLiability: "",
     yearsActive: "",
   });
+  const [truckSpecs, setTruckSpecs] = useState({
+    height: "",
+    weight: "",
+    length: "",
+    hazmat: false,
+  });
   const [matches, setMatches] = useState([]);
   const [lastMessages, setLastMessages] = useState({});
   const [reviews, setReviews] = useState([]);
   const [activeMatch, setActiveMatch] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingTruck, setSavingTruck] = useState(false);
+  const [truckSaved, setTruckSaved] = useState(false);
 
   async function loadEverything() {
     const { data: profileData } = await supabase
       .from("profiles")
-      .select("equipment_types, fleet_size, operator_type, company_name, dot_number, mc_number, insurance_cargo, insurance_liability")
+      .select("equipment_types, fleet_size, operator_type, company_name, dot_number, mc_number, insurance_cargo, insurance_liability, truck_height_inches, truck_weight_lbs, truck_length_feet, truck_hazmat")
       .eq("id", user.id)
       .single();
     setProfile(profileData);
@@ -72,6 +80,13 @@ export default function TruckerDashboard({ user }) {
       insuranceCargo: profileData?.insurance_cargo || "",
       insuranceLiability: profileData?.insurance_liability || "",
       yearsActive: detailsData?.years_active ?? "",
+    });
+
+    setTruckSpecs({
+      height: profileData?.truck_height_inches ?? "",
+      weight: profileData?.truck_weight_lbs ?? "",
+      length: profileData?.truck_length_feet ?? "",
+      hazmat: Boolean(profileData?.truck_hazmat),
     });
 
     const { data: matchData } = await supabase
@@ -162,6 +177,28 @@ export default function TruckerDashboard({ user }) {
 
     setSaving(false);
     if (!error) loadEverything();
+  }
+
+  async function saveTruckSpecs(e) {
+    e.preventDefault();
+    setSavingTruck(true);
+    setTruckSaved(false);
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        truck_height_inches: truckSpecs.height === "" ? null : Number(truckSpecs.height),
+        truck_weight_lbs: truckSpecs.weight === "" ? null : Number(truckSpecs.weight),
+        truck_length_feet: truckSpecs.length === "" ? null : Number(truckSpecs.length),
+        truck_hazmat: truckSpecs.hazmat,
+      })
+      .eq("id", user.id);
+
+    setSavingTruck(false);
+    if (!error) {
+      setTruckSaved(true);
+      setTimeout(() => setTruckSaved(false), 3000);
+    }
   }
 
   async function respondToMatch(matchId, decision) {
@@ -352,6 +389,56 @@ export default function TruckerDashboard({ user }) {
         )}
       </section>
 
+      <section>
+        <div className="flex items-center gap-2 border-b border-gray-300 pb-2">
+          <Truck size={18} className="text-steelgray" />
+          <h2 className="text-xl font-bold text-asphalt">Truck specs</h2>
+        </div>
+        <p className="text-xs text-steelgray mt-2 mb-3">
+          Used to calculate truck-legal routes on the Route Map tool — avoiding low bridges, weight-restricted roads, and hazmat-prohibited routes. Saved once, reused for every route.
+        </p>
+        <form onSubmit={saveTruckSpecs} className="bg-white border border-gray-300 rounded-sm p-4">
+          <div className="grid sm:grid-cols-3 gap-3 mb-3">
+            <Field
+              label="Height (inches)"
+              type="number"
+              value={truckSpecs.height}
+              onChange={(v) => setTruckSpecs({ ...truckSpecs, height: v })}
+              placeholder="e.g. 162"
+            />
+            <Field
+              label="Weight (lbs)"
+              type="number"
+              value={truckSpecs.weight}
+              onChange={(v) => setTruckSpecs({ ...truckSpecs, weight: v })}
+              placeholder="e.g. 80000"
+            />
+            <Field
+              label="Length (feet)"
+              type="number"
+              value={truckSpecs.length}
+              onChange={(v) => setTruckSpecs({ ...truckSpecs, length: v })}
+              placeholder="e.g. 53"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-xs text-steelgray mb-4">
+            <input
+              type="checkbox"
+              checked={truckSpecs.hazmat}
+              onChange={(e) => setTruckSpecs({ ...truckSpecs, hazmat: e.target.checked })}
+            />
+            I haul hazardous materials
+          </label>
+          <button
+            type="submit"
+            disabled={savingTruck}
+            className="w-full bg-blue-600 hover:bg-blue-800 text-white py-2.5 rounded-sm font-mono text-sm uppercase tracking-wide transition-colors disabled:opacity-50"
+          >
+            {savingTruck ? "Saving..." : truckSaved ? "Saved ✓" : "Save Truck Specs"}
+          </button>
+        </form>
+      </section>
+
       <div className="grid md:grid-cols-2 gap-6">
         <section>
           <h2 className="text-xl font-bold text-asphalt border-b border-gray-300 pb-2">Companies interested in you</h2>
@@ -432,11 +519,12 @@ function StatCard({ icon, label, value }) {
   );
 }
 
-function Field({ label, value, onChange, placeholder }) {
+function Field({ label, value, onChange, placeholder, type = "text" }) {
   return (
     <div>
       <label className="block text-xs uppercase tracking-wide text-steelgray mb-1">{label}</label>
       <input
+        type={type}
         value={value || ""}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
