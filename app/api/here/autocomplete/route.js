@@ -17,6 +17,7 @@ export async function GET(req) {
   url.searchParams.set("q", q);
   url.searchParams.set("apiKey", apiKey);
   url.searchParams.set("limit", "5");
+  url.searchParams.set("at", "39.8283,-98.5795");
   url.searchParams.set("in", "countryCode:USA,CAN");
 
   try {
