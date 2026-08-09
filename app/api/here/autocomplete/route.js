@@ -25,7 +25,7 @@ export async function GET(req) {
 
     if (!res.ok) {
       return NextResponse.json(
-        { error: data.title || "HERE autocomplete failed" },
+        { error: "HERE autocomplete failed", status: res.status, details: data },
         { status: res.status }
       );
     }
@@ -39,7 +39,7 @@ export async function GET(req) {
     }));
 
     return NextResponse.json({ items });
-  } catch {
-    return NextResponse.json({ error: "Failed to reach HERE API" }, { status: 502 });
+  } catch (err) {
+    return NextResponse.json({ error: "Failed to reach HERE API", details: String(err) }, { status: 502 });
   }
 }
