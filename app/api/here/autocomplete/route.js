@@ -13,7 +13,7 @@ export async function GET(req) {
     return NextResponse.json({ error: "HERE API key not configured" }, { status: 500 });
   }
 
-  const url = new URL("https://autocomplete.search.hereapi.com/v1/autocomplete");
+  const url = new URL("https://discover.search.hereapi.com/v1/discover");
   url.searchParams.set("q", q);
   url.searchParams.set("apiKey", apiKey);
   url.searchParams.set("limit", "5");
@@ -25,7 +25,7 @@ export async function GET(req) {
 
     if (!res.ok) {
       return NextResponse.json(
-        { error: "HERE autocomplete failed", status: res.status, details: data },
+        { error: "HERE discover failed", status: res.status, details: data },
         { status: res.status }
       );
     }
