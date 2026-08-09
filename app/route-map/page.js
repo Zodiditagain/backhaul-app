@@ -236,3 +236,121 @@ export default function RouteMapPage() {
     if (hours === 0) return `${minutes} min`;
     return `${hours} hr ${minutes} min`;
   }
+if (checkingAccess) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6">
+        <p className="text-gray-400 text-sm">Checking your access...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-950 px-6 py-10">
+      <div className="max-w-5xl mx-auto">
+        <div className="flex items-center gap-2 mb-6">
+          <Truck size={22} className="text-blue-400" />
+          <h1 className="text-2xl font-bold text-white">Route Map</h1>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4 mb-4">
+          <div className="relative">
+            <label className="block text-xs font-medium text-gray-400 mb-1">Origin</label>
+            <input
+              value={originQuery}
+              onChange={(e) => {
+                setOriginQuery(e.target.value);
+                setOrigin(null);
+                setShowOriginList(true);
+              }}
+              onFocus={() => setShowOriginList(true)}
+              placeholder="Enter a city, address, or zip"
+              className="w-full bg-slate-900 border border-slate-800 text-white text-sm rounded-md py-2.5 px-3 focus:outline-none focus:border-blue-500"
+            />
+            {showOriginList && originSuggestions.length > 0 && (
+              <div className="absolute z-10 mt-1 w-full bg-slate-900 border border-slate-800 rounded-md overflow-hidden shadow-lg">
+                {originSuggestions.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => selectSuggestion("origin", s)}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-slate-800 flex items-start gap-2"
+                  >
+                    <MapPin size={14} className="mt-0.5 text-gray-500 flex-shrink-0" />
+                    <span>{s.address}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="relative">
+            <label className="block text-xs font-medium text-gray-400 mb-1">Destination</label>
+            <input
+              value={destQuery}
+              onChange={(e) => {
+                setDestQuery(e.target.value);
+                setDestination(null);
+                setShowDestList(true);
+              }}
+              onFocus={() => setShowDestList(true)}
+              placeholder="Enter a city, address, or zip"
+              className="w-full bg-slate-900 border border-slate-800 text-white text-sm rounded-md py-2.5 px-3 focus:outline-none focus:border-blue-500"
+            />
+            {showDestList && destSuggestions.length > 0 && (
+              <div className="absolute z-10 mt-1 w-full bg-slate-900 border border-slate-800 rounded-md overflow-hidden shadow-lg">
+                {destSuggestions.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => selectSuggestion("dest", s)}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-slate-800 flex items-start gap-2"
+                  >
+                    <MapPin size={14} className="mt-0.5 text-gray-500 flex-shrink-0" />
+                    <span>{s.address}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <button
+          onClick={handleGetRoute}
+          disabled={routing || !origin || !destination}
+          className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-800 disabled:text-gray-500 text-white text-sm font-semibold py-2.5 px-5 rounded-md transition flex items-center gap-2 mb-4"
+        >
+          {routing && <Loader2 size={16} className="animate-spin" />}
+          {routing ? "Calculating route..." : "Get Route"}
+        </button>
+
+        {error && (
+          <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/30 rounded-md py-2 px-3 mb-4">
+            <AlertCircle size={14} />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {routeResult && (
+          <div className="flex gap-6 bg-slate-900 border border-slate-800 rounded-md py-3 px-4 mb-4">
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Distance</p>
+              <p className="text-lg font-semibold text-white">
+                {formatDistance(routeResult.distanceMeters)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Drive Time</p>
+              <p className="text-lg font-semibold text-white">
+                {formatDuration(routeResult.durationSeconds)}
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div
+          ref={mapRef}
+          className="w-full h-[500px] rounded-md border border-slate-800 bg-slate-900"
+        />
+        {!mapsReady && <p className="text-gray-500 text-xs mt-2">Loading map...</p>}
+      </div>
+    </div>
+  );
+}
