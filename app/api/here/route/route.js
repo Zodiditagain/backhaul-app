@@ -21,6 +21,7 @@ export async function POST(req) {
   url.searchParams.set("origin", `${origin.lat},${origin.lng}`);
   url.searchParams.set("destination", `${destination.lat},${destination.lng}`);
   url.searchParams.set("return", "summary,polyline,actions");
+  url.searchParams.set("lang", "en-US");
   url.searchParams.set("apiKey", apiKey);
 
   if (truckSpecs) {
@@ -58,7 +59,11 @@ export async function POST(req) {
     }
 
     const actions = (section.actions || []).map((a) => ({
-      instruction: a.instruction,
+      instruction:
+        a.instruction ||
+        `${a.action || "Continue"}${
+          a.nextRoad?.name?.[0]?.value ? " onto " + a.nextRoad.name[0].value : ""
+        }`,
       distanceMeters: a.length ?? 0,
       durationSeconds: a.duration ?? 0,
     }));
