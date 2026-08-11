@@ -11,6 +11,7 @@ export default function RouteMapPage() {
 
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [hasAccess, setHasAccess] = useState(false);
+  const [truckSpecs, setTruckSpecs] = useState(null);
 
   const [originQuery, setOriginQuery] = useState("");
   const [originSuggestions, setOriginSuggestions] = useState([]);
@@ -56,6 +57,17 @@ export default function RouteMapPage() {
       router.push("/route-map/subscribe");
       return;
     }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("truck_height_inches, truck_weight_lbs, truck_length_feet, truck_axle_count")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profile) {
+      setTruckSpecs(profile);
+    }
+
     setHasAccess(true);
     setCheckingAccess(false);
   }
@@ -182,7 +194,7 @@ export default function RouteMapPage() {
       const res = await fetch("/api/here/route", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ origin, destination }),
+        body: JSON.stringify({ origin, destination, truckSpecs }),
       });
       const data = await res.json();
 
@@ -236,7 +248,14 @@ export default function RouteMapPage() {
     if (hours === 0) return `${minutes} min`;
     return `${hours} hr ${minutes} min`;
   }
-if (checkingAccess) {
+
+  const hasTruckSpecs =
+    truckSpecs &&
+    (truckSpecs.truck_height_inches ||
+      truckSpecs.truck_weight_lbs ||
+      truckSpecs.truck_length_feet ||
+      truckSpecs.truck_axle_count);
+  if (checkingAccess) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6">
         <p className="text-gray-400 text-sm">Checking your access...</p>
@@ -247,10 +266,21 @@ if (checkingAccess) {
   return (
     <div className="min-h-screen bg-slate-950 px-6 py-10">
       <div className="max-w-5xl mx-auto">
-        <div className="flex items-center gap-2 mb-6">
+        <div className="flex items-center gap-2 mb-2">
           <Truck size={22} className="text-blue-400" />
           <h1 className="text-2xl font-bold text-white">Route Map</h1>
         </div>
+
+        {hasTruckSpecs ? (
+          <p className="text-xs text-amber-400 mb-6">
+            Routing with your truck specs — restricted roads and low bridges will be avoided.
+          </p>
+        ) : (
+          <p className="text-xs text-gray-500 mb-6">
+            No truck dimensions on file yet — routes will use standard truck defaults. Add your
+            height, weight, length, and axle count in your profile for restricted routing.
+          </p>
+        )}
 
         <div className="grid md:grid-cols-2 gap-4 mb-4">
           <div className="relative">
