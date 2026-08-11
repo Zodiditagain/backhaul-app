@@ -94,7 +94,7 @@ export default function RouteMapPage() {
       "https://js.api.here.com/v3/3.1/mapsjs-mapevents.js",
     ];
 
-    let loadedCount = 0;
+let loadedCount = 0;
     scripts.forEach((src) => {
       const existing = document.querySelector(`script[src="${src}"]`);
       if (existing) {
@@ -104,14 +104,13 @@ export default function RouteMapPage() {
       }
       const script = document.createElement("script");
       script.src = src;
-      script.async = true;
+      script.async = false;
       script.onload = () => {
         loadedCount += 1;
         if (loadedCount === scripts.length) setMapsReady(true);
       };
       document.body.appendChild(script);
-    });
-  }, [hasAccess]);
+    });  }, [hasAccess]);
 
   useEffect(() => {
     if (!mapsReady || !mapRef.current || mapInstance.current) return;
