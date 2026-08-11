@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { MessageCircle, Handshake, Fuel, Building2, Package as PackageIcon, Check, X, Truck } from "lucide-react";
+import { MessageCircle, Handshake, Fuel, Building2, Package as PackageIcon, Check, X, Truck, Map, ArrowRight } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import GradeBadge, { computeStats } from "./GradeBadge";
 import MatchThread from "./MatchThread";
@@ -42,6 +42,7 @@ export default function TruckerDashboard({ user }) {
     height: "",
     weight: "",
     length: "",
+    axleCount: "",
     hazmat: false,
   });
   const [matches, setMatches] = useState([]);
@@ -56,7 +57,7 @@ export default function TruckerDashboard({ user }) {
   async function loadEverything() {
     const { data: profileData } = await supabase
       .from("profiles")
-      .select("equipment_types, fleet_size, operator_type, company_name, dot_number, mc_number, insurance_cargo, insurance_liability, truck_height_inches, truck_weight_lbs, truck_length_feet, truck_hazmat")
+      .select("equipment_types, fleet_size, operator_type, company_name, dot_number, mc_number, insurance_cargo, insurance_liability, truck_height_inches, truck_weight_lbs, truck_length_feet, truck_axle_count, truck_hazmat")
       .eq("id", user.id)
       .single();
     setProfile(profileData);
@@ -86,6 +87,7 @@ export default function TruckerDashboard({ user }) {
       height: profileData?.truck_height_inches ?? "",
       weight: profileData?.truck_weight_lbs ?? "",
       length: profileData?.truck_length_feet ?? "",
+      axleCount: profileData?.truck_axle_count ?? "",
       hazmat: Boolean(profileData?.truck_hazmat),
     });
 
@@ -190,6 +192,7 @@ export default function TruckerDashboard({ user }) {
         truck_height_inches: truckSpecs.height === "" ? null : Number(truckSpecs.height),
         truck_weight_lbs: truckSpecs.weight === "" ? null : Number(truckSpecs.weight),
         truck_length_feet: truckSpecs.length === "" ? null : Number(truckSpecs.length),
+        truck_axle_count: truckSpecs.axleCount === "" ? null : Number(truckSpecs.axleCount),
         truck_hazmat: truckSpecs.hazmat,
       })
       .eq("id", user.id);
@@ -240,6 +243,31 @@ export default function TruckerDashboard({ user }) {
         />
       </div>
 
+      <Link
+        href="/route-map"
+        className="block bg-asphalt border-2 border-amberx rounded-sm p-5 hover:border-amberx/70 transition-colors"
+      >
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-11 h-11 rotate-45 bg-amberx flex items-center justify-center shrink-0">
+              <Map className="-rotate-45" size={20} color="#1B1E21" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-white font-bold text-base">Route Map</span>
+                <span className="text-[10px] uppercase font-mono tracking-wide bg-amberx text-asphalt px-1.5 py-0.5 rounded-sm">
+                  Truck-Legal Routing
+                </span>
+              </div>
+              <p className="text-gray-400 text-xs mt-0.5">
+                Plan routes that respect your truck's height, weight, and length — avoiding low bridges and restricted roads.
+              </p>
+            </div>
+          </div>
+          <ArrowRight size={18} className="text-amberx shrink-0" />
+        </div>
+      </Link>
+
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <StatCard icon={<Building2 size={16} />} label="Broker Matches" value={brokerMatches.length} />
         <StatCard icon={<PackageIcon size={16} />} label="Vendor Matches" value={vendorMatches.length} />
@@ -250,7 +278,6 @@ export default function TruckerDashboard({ user }) {
           </div>
         </div>
       </div>
-
       {pendingMatches.length > 0 && (
         <section>
           <h2 className="text-xl font-bold text-asphalt border-b border-gray-300 pb-2">Pending requests</h2>
@@ -398,7 +425,7 @@ export default function TruckerDashboard({ user }) {
           Used to calculate truck-legal routes on the Route Map tool — avoiding low bridges, weight-restricted roads, and hazmat-prohibited routes. Saved once, reused for every route.
         </p>
         <form onSubmit={saveTruckSpecs} className="bg-white border border-gray-300 rounded-sm p-4">
-          <div className="grid sm:grid-cols-3 gap-3 mb-3">
+          <div className="grid sm:grid-cols-2 gap-3 mb-3">
             <Field
               label="Height (inches)"
               type="number"
@@ -413,12 +440,21 @@ export default function TruckerDashboard({ user }) {
               onChange={(v) => setTruckSpecs({ ...truckSpecs, weight: v })}
               placeholder="e.g. 80000"
             />
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3 mb-3">
             <Field
               label="Length (feet)"
               type="number"
               value={truckSpecs.length}
               onChange={(v) => setTruckSpecs({ ...truckSpecs, length: v })}
               placeholder="e.g. 53"
+            />
+            <Field
+              label="Axle Count"
+              type="number"
+              value={truckSpecs.axleCount}
+              onChange={(v) => setTruckSpecs({ ...truckSpecs, axleCount: v })}
+              placeholder="e.g. 5"
             />
           </div>
           <label className="flex items-center gap-2 text-xs text-steelgray mb-4">
