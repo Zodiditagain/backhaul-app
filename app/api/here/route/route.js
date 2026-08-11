@@ -7,7 +7,7 @@ export async function POST(req) {
   }
 
   const body = await req.json();
-  const { origin, destination } = body;
+  const { origin, destination, truckSpecs } = body;
 
   if (!origin?.lat || !origin?.lng || !destination?.lat || !destination?.lng) {
     return NextResponse.json(
@@ -23,13 +23,31 @@ export async function POST(req) {
   url.searchParams.set("return", "summary,polyline");
   url.searchParams.set("apiKey", apiKey);
 
+  if (truckSpecs) {
+    const heightCm = truckSpecs.truck_height_inches
+      ? Math.round(truckSpecs.truck_height_inches * 2.54)
+      : null;
+    const weightKg = truckSpecs.truck_weight_lbs
+      ? Math.round(truckSpecs.truck_weight_lbs * 0.453592)
+      : null;
+    const lengthCm = truckSpecs.truck_length_feet
+      ? Math.round(truckSpecs.truck_length_feet * 30.48)
+      : null;
+    const axleCount = truckSpecs.truck_axle_count || null;
+
+    if (heightCm) url.searchParams.set("truck[height]", String(heightCm));
+    if (weightKg) url.searchParams.set("truck[grossWeight]", String(weightKg));
+    if (lengthCm) url.searchParams.set("truck[length]", String(lengthCm));
+    if (axleCount) url.searchParams.set("truck[axleCount]", String(axleCount));
+  }
+
   try {
     const res = await fetch(url.toString());
     const data = await res.json();
 
     if (!res.ok) {
       return NextResponse.json(
-        { error: data.title || "HERE routing failed" },
+        { error: "HERE routing failed", status: res.status, details: data },
         { status: res.status }
       );
     }
@@ -43,8 +61,9 @@ export async function POST(req) {
       distanceMeters: section.summary.length,
       durationSeconds: section.summary.duration,
       polyline: section.polyline,
+      usedTruckRestrictions: !!truckSpecs,
     });
-  } catch {
-    return NextResponse.json({ error: "Failed to reach HERE API" }, { status: 502 });
+  } catch (err) {
+    return NextResponse.json({ error: "Failed to reach HERE API", details: String(err) }, { status: 502 });
   }
 }
