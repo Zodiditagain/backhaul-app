@@ -20,7 +20,7 @@ export async function POST(req) {
   url.searchParams.set("transportMode", "truck");
   url.searchParams.set("origin", `${origin.lat},${origin.lng}`);
   url.searchParams.set("destination", `${destination.lat},${destination.lng}`);
-  url.searchParams.set("return", "summary,polyline,actions");
+  url.searchParams.set("return", "summary,polyline,actions,instructions");
   url.searchParams.set("lang", "en-US");
   url.searchParams.set("apiKey", apiKey);
 
@@ -58,15 +58,18 @@ export async function POST(req) {
       return NextResponse.json({ error: "No route found between those points" }, { status: 404 });
     }
 
-    const actions = (section.actions || []).map((a) => ({
-      instruction:
-        a.instruction ||
-        `${a.action || "Continue"}${
-          a.nextRoad?.name?.[0]?.value ? " onto " + a.nextRoad.name[0].value : ""
-        }`,
-      distanceMeters: a.length ?? 0,
-      durationSeconds: a.duration ?? 0,
-    }));
+    const actions = (section.actions || []).map((a) => {
+      let fallback = a.action || "Continue";
+      if (a.direction) fallback = `Turn ${a.direction}`;
+      const roadName = a.nextRoad?.name?.[0]?.value || a.currentRoad?.name?.[0]?.value;
+      if (roadName) fallback += ` onto ${roadName}`;
+
+      return {
+        instruction: a.instruction || fallback,
+        distanceMeters: a.length ?? 0,
+        durationSeconds: a.duration ?? 0,
+      };
+    });
 
     return NextResponse.json({
       distanceMeters: section.summary.length,
