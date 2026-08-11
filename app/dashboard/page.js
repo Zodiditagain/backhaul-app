@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Truck, LogOut, Settings, Shield, Calculator } from "lucide-react";
+import { Truck, LogOut, Settings, Shield, Calculator, Map } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import TruckerDashboard from "../../components/TruckerDashboard";
 import MatchmakingDashboard from "../../components/MatchmakingDashboard";
@@ -64,6 +64,14 @@ export default function Dashboard() {
                 className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-mono uppercase tracking-wide px-2.5 py-1.5 rounded-sm"
               >
                 <Shield size={14} /> Admin
+              </Link>
+            )}
+            {isTrucker && (
+              <Link
+                href="/route-map"
+                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
+              >
+                <Map size={14} /> Route Map
               </Link>
             )}
             {isTrucker && (
