@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { MapPin, Loader2, Truck, AlertCircle } from "lucide-react";
+import { MapPin, Loader2, Truck, AlertCircle, Navigation } from "lucide-react";
 import { decode as decodeFlexPolyline } from "@here/flexpolyline";
 import { supabase } from "../../lib/supabaseClient";
 
@@ -26,6 +26,7 @@ export default function RouteMapPage() {
   const [routeResult, setRouteResult] = useState(null);
   const [routing, setRouting] = useState(false);
   const [error, setError] = useState("");
+  const [showDirections, setShowDirections] = useState(false);
 
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
@@ -94,7 +95,7 @@ export default function RouteMapPage() {
       "https://js.api.here.com/v3/3.1/mapsjs-mapevents.js",
     ];
 
-let loadedCount = 0;
+    let loadedCount = 0;
     scripts.forEach((src) => {
       const existing = document.querySelector(`script[src="${src}"]`);
       if (existing) {
@@ -110,7 +111,8 @@ let loadedCount = 0;
         if (loadedCount === scripts.length) setMapsReady(true);
       };
       document.body.appendChild(script);
-    });  }, [hasAccess]);
+    });
+  }, [hasAccess]);
 
   useEffect(() => {
     if (!mapsReady || !mapRef.current || mapInstance.current) return;
@@ -188,6 +190,7 @@ let loadedCount = 0;
     setError("");
     setRouting(true);
     setRouteResult(null);
+    setShowDirections(false);
 
     try {
       const res = await fetch("/api/here/route", {
@@ -358,19 +361,55 @@ let loadedCount = 0;
         )}
 
         {routeResult && (
-          <div className="flex gap-6 bg-slate-900 border border-slate-800 rounded-md py-3 px-4 mb-4">
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Distance</p>
-              <p className="text-lg font-semibold text-white">
-                {formatDistance(routeResult.distanceMeters)}
-              </p>
+          <div className="bg-slate-900 border border-slate-800 rounded-md mb-4 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex gap-6">
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">Distance</p>
+                  <p className="text-lg font-semibold text-white">
+                    {formatDistance(routeResult.distanceMeters)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">Drive Time</p>
+                  <p className="text-lg font-semibold text-white">
+                    {formatDuration(routeResult.durationSeconds)}
+                  </p>
+                </div>
+              </div>
+              {routeResult.actions && routeResult.actions.length > 0 && (
+                <button
+                  onClick={() => setShowDirections((v) => !v)}
+                  className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 text-xs font-medium uppercase tracking-wide"
+                >
+                  <Navigation size={14} />
+                  {showDirections ? "Hide Directions" : "Show Directions"}
+                </button>
+              )}
             </div>
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Drive Time</p>
-              <p className="text-lg font-semibold text-white">
-                {formatDuration(routeResult.durationSeconds)}
-              </p>
-            </div>
+
+            {showDirections && routeResult.actions && (
+              <div className="border-t border-slate-800 max-h-80 overflow-y-auto">
+                {routeResult.actions.map((step, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start gap-3 px-4 py-3 border-b border-slate-800 last:border-b-0"
+                  >
+                    <span className="text-xs font-mono text-gray-600 mt-0.5 w-5 shrink-0">
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm text-gray-200">{step.instruction}</p>
+                      {step.distanceMeters > 0 && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {formatDistance(step.distanceMeters)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
