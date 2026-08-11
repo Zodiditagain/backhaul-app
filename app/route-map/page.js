@@ -2,9 +2,31 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { MapPin, Loader2, Truck, AlertCircle, Navigation } from "lucide-react";
+import {
+  MapPin,
+  Loader2,
+  Truck,
+  AlertCircle,
+  Navigation,
+  Volume2,
+  VolumeX,
+  Locate,
+  XCircle,
+} from "lucide-react";
 import { decode as decodeFlexPolyline } from "@here/flexpolyline";
 import { supabase } from "../../lib/supabaseClient";
+
+function haversineMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
 export default function RouteMapPage() {
   const router = useRouter();
@@ -27,12 +49,45 @@ export default function RouteMapPage() {
   const [routing, setRouting] = useState(false);
   const [error, setError] = useState("");
   const [showDirections, setShowDirections] = useState(false);
+  const [actionPoints, setActionPoints] = useState([]);
+
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [followMode, setFollowMode] = useState(true);
+  const [currentPosition, setCurrentPosition] = useState(null);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [navError, setNavError] = useState("");
 
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const platformRef = useRef(null);
   const mapObjectsGroup = useRef(null);
+  const truckMarkerRef = useRef(null);
+  const decodedPointsRef = useRef([]);
+  const watchIdRef = useRef(null);
+
+  const followModeRef = useRef(true);
+  const currentStepIndexRef = useRef(0);
+  const actionPointsRef = useRef([]);
+  const voiceEnabledRef = useRef(true);
+
   const [mapsReady, setMapsReady] = useState(false);
+
+  useEffect(() => {
+    followModeRef.current = followMode;
+  }, [followMode]);
+
+  useEffect(() => {
+    currentStepIndexRef.current = currentStepIndex;
+  }, [currentStepIndex]);
+
+  useEffect(() => {
+    actionPointsRef.current = actionPoints;
+  }, [actionPoints]);
+
+  useEffect(() => {
+    voiceEnabledRef.current = voiceEnabled;
+  }, [voiceEnabled]);
 
   useEffect(() => {
     checkAccess();
@@ -133,6 +188,10 @@ export default function RouteMapPage() {
     new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
     H.ui.UI.createDefault(map, defaultLayers);
 
+    map.addEventListener("dragstart", () => {
+      setFollowMode(false);
+    });
+
     mapObjectsGroup.current = new H.map.Group();
     map.addObject(mapObjectsGroup.current);
 
@@ -143,6 +202,20 @@ export default function RouteMapPage() {
     return () => window.removeEventListener("resize", resizeHandler);
   }, [mapsReady]);
 
+  useEffect(() => {
+    if (!routeResult) {
+      setActionPoints([]);
+      return;
+    }
+    const points = decodedPointsRef.current;
+    const pts = (routeResult.actions || []).map((a) => {
+      const idx = Math.min(a.offset ?? 0, points.length - 1);
+      const p = points[idx];
+      return { ...a, lat: p ? p[0] : null, lng: p ? p[1] : null };
+    });
+    setActionPoints(pts);
+    setCurrentStepIndex(0);
+  }, [routeResult]);
   const fetchSuggestions = useCallback(async (q, kind) => {
     if (q.trim().length < 3) {
       kind === "origin" ? setOriginSuggestions([]) : setDestSuggestions([]);
@@ -191,6 +264,7 @@ export default function RouteMapPage() {
     setRouting(true);
     setRouteResult(null);
     setShowDirections(false);
+    if (isNavigating) endNavigation();
 
     try {
       const res = await fetch("/api/here/route", {
@@ -223,6 +297,8 @@ export default function RouteMapPage() {
     mapObjectsGroup.current.removeAll();
 
     const decoded = decodeFlexPolyline(polyline);
+    decodedPointsRef.current = decoded.polyline;
+
     const lineString = new H.geo.LineString();
     decoded.polyline.forEach(([lat, lng]) => {
       lineString.pushPoint({ lat, lng });
@@ -237,6 +313,105 @@ export default function RouteMapPage() {
 
     mapObjectsGroup.current.addObjects([routeLine, originMarker, destMarker]);
     map.getViewModel().setLookAtData({ bounds: mapObjectsGroup.current.getBoundingBox() });
+  }
+
+  function updateTruckMarker(lat, lng) {
+    const H = window.H;
+    const map = mapInstance.current;
+    if (!H || !map) return;
+
+    if (!truckMarkerRef.current) {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26"><circle cx="13" cy="13" r="9" fill="#3b82f6" stroke="white" stroke-width="3"/></svg>';
+      const icon = new H.map.Icon(svg, { size: { w: 26, h: 26 }, anchor: { x: 13, y: 13 } });
+      truckMarkerRef.current = new H.map.Marker({ lat, lng }, { icon });
+      map.addObject(truckMarkerRef.current);
+    } else {
+      truckMarkerRef.current.setGeometry({ lat, lng });
+    }
+  }
+
+  function checkForAnnouncement(lat, lng) {
+    const idx = currentStepIndexRef.current;
+    const pts = actionPointsRef.current;
+    if (idx >= pts.length) return;
+    const step = pts[idx];
+    if (step.lat == null || step.lng == null) {
+      currentStepIndexRef.current = idx + 1;
+      setCurrentStepIndex(idx + 1);
+      return;
+    }
+    const dist = haversineMeters(lat, lng, step.lat, step.lng);
+    if (dist < 150) {
+      if (voiceEnabledRef.current && window.speechSynthesis) {
+        const utter = new SpeechSynthesisUtterance(step.instruction);
+        window.speechSynthesis.speak(utter);
+      }
+      const next = idx + 1;
+      currentStepIndexRef.current = next;
+      setCurrentStepIndex(next);
+    }
+  }
+
+  function handlePositionUpdate(pos) {
+    const lat = pos.coords.latitude;
+    const lng = pos.coords.longitude;
+    setCurrentPosition({ lat, lng });
+    updateTruckMarker(lat, lng);
+    if (followModeRef.current && mapInstance.current) {
+      mapInstance.current.setCenter({ lat, lng });
+      mapInstance.current.setZoom(17);
+    }
+    checkForAnnouncement(lat, lng);
+  }
+
+  function handleGeoError(err) {
+    setNavError("Couldn't get your location: " + err.message);
+  }
+
+  function startNavigation() {
+    if (!navigator.geolocation) {
+      setNavError("Geolocation isn't available on this device or browser.");
+      return;
+    }
+    setNavError("");
+
+    if (voiceEnabled && window.speechSynthesis) {
+      const greet = new SpeechSynthesisUtterance("Starting navigation.");
+      window.speechSynthesis.speak(greet);
+    }
+
+    setIsNavigating(true);
+    setFollowMode(true);
+    setCurrentStepIndex(0);
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      handlePositionUpdate,
+      handleGeoError,
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
+    );
+  }
+
+  function endNavigation() {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    setIsNavigating(false);
+    setCurrentPosition(null);
+    if (truckMarkerRef.current && mapInstance.current) {
+      mapInstance.current.removeObject(truckMarkerRef.current);
+      truckMarkerRef.current = null;
+    }
+  }
+
+  function recenter() {
+    setFollowMode(true);
+    if (currentPosition && mapInstance.current) {
+      mapInstance.current.setCenter(currentPosition);
+      mapInstance.current.setZoom(17);
+    }
   }
 
   function formatDistance(meters) {
@@ -257,6 +432,8 @@ export default function RouteMapPage() {
       truckSpecs.truck_weight_lbs ||
       truckSpecs.truck_length_feet ||
       truckSpecs.truck_axle_count);
+
+  const currentStep = actionPoints[currentStepIndex];
   if (checkingAccess) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6">
@@ -284,74 +461,78 @@ export default function RouteMapPage() {
           </p>
         )}
 
-        <div className="grid md:grid-cols-2 gap-4 mb-4">
-          <div className="relative">
-            <label className="block text-xs font-medium text-gray-400 mb-1">Origin</label>
-            <input
-              value={originQuery}
-              onChange={(e) => {
-                setOriginQuery(e.target.value);
-                setOrigin(null);
-                setShowOriginList(true);
-              }}
-              onFocus={() => setShowOriginList(true)}
-              placeholder="Enter a city, address, or zip"
-              className="w-full bg-slate-900 border border-slate-800 text-white text-sm rounded-md py-2.5 px-3 focus:outline-none focus:border-blue-500"
-            />
-            {showOriginList && originSuggestions.length > 0 && (
-              <div className="absolute z-10 mt-1 w-full bg-slate-900 border border-slate-800 rounded-md overflow-hidden shadow-lg">
-                {originSuggestions.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => selectSuggestion("origin", s)}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-slate-800 flex items-start gap-2"
-                  >
-                    <MapPin size={14} className="mt-0.5 text-gray-500 flex-shrink-0" />
-                    <span>{s.address}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+        {!isNavigating && (
+          <div className="grid md:grid-cols-2 gap-4 mb-4">
+            <div className="relative">
+              <label className="block text-xs font-medium text-gray-400 mb-1">Origin</label>
+              <input
+                value={originQuery}
+                onChange={(e) => {
+                  setOriginQuery(e.target.value);
+                  setOrigin(null);
+                  setShowOriginList(true);
+                }}
+                onFocus={() => setShowOriginList(true)}
+                placeholder="Enter a city, address, or zip"
+                className="w-full bg-slate-900 border border-slate-800 text-white text-sm rounded-md py-2.5 px-3 focus:outline-none focus:border-blue-500"
+              />
+              {showOriginList && originSuggestions.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full bg-slate-900 border border-slate-800 rounded-md overflow-hidden shadow-lg">
+                  {originSuggestions.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => selectSuggestion("origin", s)}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-slate-800 flex items-start gap-2"
+                    >
+                      <MapPin size={14} className="mt-0.5 text-gray-500 flex-shrink-0" />
+                      <span>{s.address}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
-          <div className="relative">
-            <label className="block text-xs font-medium text-gray-400 mb-1">Destination</label>
-            <input
-              value={destQuery}
-              onChange={(e) => {
-                setDestQuery(e.target.value);
-                setDestination(null);
-                setShowDestList(true);
-              }}
-              onFocus={() => setShowDestList(true)}
-              placeholder="Enter a city, address, or zip"
-              className="w-full bg-slate-900 border border-slate-800 text-white text-sm rounded-md py-2.5 px-3 focus:outline-none focus:border-blue-500"
-            />
-            {showDestList && destSuggestions.length > 0 && (
-              <div className="absolute z-10 mt-1 w-full bg-slate-900 border border-slate-800 rounded-md overflow-hidden shadow-lg">
-                {destSuggestions.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => selectSuggestion("dest", s)}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-slate-800 flex items-start gap-2"
-                  >
-                    <MapPin size={14} className="mt-0.5 text-gray-500 flex-shrink-0" />
-                    <span>{s.address}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className="relative">
+              <label className="block text-xs font-medium text-gray-400 mb-1">Destination</label>
+              <input
+                value={destQuery}
+                onChange={(e) => {
+                  setDestQuery(e.target.value);
+                  setDestination(null);
+                  setShowDestList(true);
+                }}
+                onFocus={() => setShowDestList(true)}
+                placeholder="Enter a city, address, or zip"
+                className="w-full bg-slate-900 border border-slate-800 text-white text-sm rounded-md py-2.5 px-3 focus:outline-none focus:border-blue-500"
+              />
+              {showDestList && destSuggestions.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full bg-slate-900 border border-slate-800 rounded-md overflow-hidden shadow-lg">
+                  {destSuggestions.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => selectSuggestion("dest", s)}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-slate-800 flex items-start gap-2"
+                    >
+                      <MapPin size={14} className="mt-0.5 text-gray-500 flex-shrink-0" />
+                      <span>{s.address}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
-        <button
-          onClick={handleGetRoute}
-          disabled={routing || !origin || !destination}
-          className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-800 disabled:text-gray-500 text-white text-sm font-semibold py-2.5 px-5 rounded-md transition flex items-center gap-2 mb-4"
-        >
-          {routing && <Loader2 size={16} className="animate-spin" />}
-          {routing ? "Calculating route..." : "Get Route"}
-        </button>
+        {!isNavigating && (
+          <button
+            onClick={handleGetRoute}
+            disabled={routing || !origin || !destination}
+            className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-800 disabled:text-gray-500 text-white text-sm font-semibold py-2.5 px-5 rounded-md transition flex items-center gap-2 mb-4"
+          >
+            {routing && <Loader2 size={16} className="animate-spin" />}
+            {routing ? "Calculating route..." : "Get Route"}
+          </button>
+        )}
 
         {error && (
           <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/30 rounded-md py-2 px-3 mb-4">
@@ -360,9 +541,25 @@ export default function RouteMapPage() {
           </div>
         )}
 
-        {routeResult && (
+        {navError && (
+          <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/30 rounded-md py-2 px-3 mb-4">
+            <AlertCircle size={14} />
+            <span>{navError}</span>
+          </div>
+        )}
+
+        {isNavigating && currentStep && (
+          <div className="bg-blue-600 rounded-md px-4 py-4 mb-4">
+            <p className="text-xs text-blue-200 uppercase tracking-wide mb-1">Next</p>
+            <p className="text-lg font-semibold text-white leading-snug">
+              {currentStep.instruction}
+            </p>
+          </div>
+        )}
+
+        {routeResult && !isNavigating && (
           <div className="bg-slate-900 border border-slate-800 rounded-md mb-4 overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center justify-between px-4 py-3 flex-wrap gap-2">
               <div className="flex gap-6">
                 <div>
                   <p className="text-xs text-gray-500 uppercase tracking-wide">Distance</p>
@@ -377,15 +574,24 @@ export default function RouteMapPage() {
                   </p>
                 </div>
               </div>
-              {routeResult.actions && routeResult.actions.length > 0 && (
+              <div className="flex items-center gap-4">
+                {routeResult.actions && routeResult.actions.length > 0 && (
+                  <button
+                    onClick={() => setShowDirections((v) => !v)}
+                    className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 text-xs font-medium uppercase tracking-wide"
+                  >
+                    <Navigation size={14} />
+                    {showDirections ? "Hide Directions" : "Show Directions"}
+                  </button>
+                )}
                 <button
-                  onClick={() => setShowDirections((v) => !v)}
-                  className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 text-xs font-medium uppercase tracking-wide"
+                  onClick={startNavigation}
+                  className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold uppercase tracking-wide px-3 py-2 rounded-md"
                 >
                   <Navigation size={14} />
-                  {showDirections ? "Hide Directions" : "Show Directions"}
+                  Start Navigation
                 </button>
-              )}
+              </div>
             </div>
 
             {showDirections && routeResult.actions && (
@@ -413,10 +619,40 @@ export default function RouteMapPage() {
           </div>
         )}
 
-        <div
-          ref={mapRef}
-          className="w-full h-[500px] rounded-md border border-slate-800 bg-slate-900"
-        />
+        {isNavigating && (
+          <div className="flex items-center gap-3 mb-4">
+            <button
+              onClick={() => setVoiceEnabled((v) => !v)}
+              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-medium uppercase tracking-wide px-3 py-2 rounded-md"
+            >
+              {voiceEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
+              {voiceEnabled ? "Voice On" : "Voice Off"}
+            </button>
+            <button
+              onClick={endNavigation}
+              className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold uppercase tracking-wide px-3 py-2 rounded-md"
+            >
+              <XCircle size={14} />
+              End Navigation
+            </button>
+          </div>
+        )}
+
+        <div className="relative">
+          <div
+            ref={mapRef}
+            className="w-full h-[500px] rounded-md border border-slate-800 bg-slate-900"
+          />
+          {isNavigating && !followMode && (
+            <button
+              onClick={recenter}
+              className="absolute bottom-4 right-4 flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold uppercase tracking-wide px-3 py-2 rounded-full shadow-lg"
+            >
+              <Locate size={14} />
+              Re-center
+            </button>
+          )}
+        </div>
         {!mapsReady && <p className="text-gray-500 text-xs mt-2">Loading map...</p>}
       </div>
     </div>
