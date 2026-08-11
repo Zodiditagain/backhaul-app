@@ -20,7 +20,7 @@ export async function POST(req) {
   url.searchParams.set("transportMode", "truck");
   url.searchParams.set("origin", `${origin.lat},${origin.lng}`);
   url.searchParams.set("destination", `${destination.lat},${destination.lng}`);
-  url.searchParams.set("return", "summary,polyline");
+  url.searchParams.set("return", "summary,polyline,actions");
   url.searchParams.set("apiKey", apiKey);
 
   if (truckSpecs) {
@@ -57,10 +57,17 @@ export async function POST(req) {
       return NextResponse.json({ error: "No route found between those points" }, { status: 404 });
     }
 
+    const actions = (section.actions || []).map((a) => ({
+      instruction: a.instruction,
+      distanceMeters: a.length ?? 0,
+      durationSeconds: a.duration ?? 0,
+    }));
+
     return NextResponse.json({
       distanceMeters: section.summary.length,
       durationSeconds: section.summary.duration,
       polyline: section.polyline,
+      actions,
       usedTruckRestrictions: !!truckSpecs,
     });
   } catch (err) {
