@@ -22,6 +22,7 @@ export async function POST(req) {
   url.searchParams.set("destination", `${destination.lat},${destination.lng}`);
   url.searchParams.set("return", "summary,polyline,actions,instructions");
   url.searchParams.set("lang", "en-US");
+  url.searchParams.set("units", "imperial");
   url.searchParams.set("apiKey", apiKey);
 
   if (truckSpecs) {
@@ -68,6 +69,7 @@ export async function POST(req) {
         instruction: a.instruction || fallback,
         distanceMeters: a.length ?? 0,
         durationSeconds: a.duration ?? 0,
+        offset: a.offset ?? 0,
       };
     });
 
