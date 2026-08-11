@@ -353,11 +353,11 @@ export default function RouteMapPage() {
     }
   }
 
-  function handlePositionUpdate(pos) {
+ function handlePositionUpdate(pos) {
+    setNavError("");
     const lat = pos.coords.latitude;
     const lng = pos.coords.longitude;
-    setCurrentPosition({ lat, lng });
-    updateTruckMarker(lat, lng);
+    setCurrentPosition({ lat, lng });    updateTruckMarker(lat, lng);
     if (followModeRef.current && mapInstance.current) {
       mapInstance.current.setCenter({ lat, lng });
       mapInstance.current.setZoom(17);
