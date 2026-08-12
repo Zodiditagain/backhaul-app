@@ -80,11 +80,15 @@ export default function RouteMapPage() {
   const lastRerouteRef = useRef(0);
   const offRouteStreakRef = useRef(0);
   const announceStagesRef = useRef({});
+  const isNavigatingRef = useRef(false);
   const [mapsReady, setMapsReady] = useState(false);
 
   useEffect(() => {
     followModeRef.current = followMode;
   }, [followMode]);
+  useEffect(() => {
+    isNavigatingRef.current = isNavigating;
+  }, [isNavigating]);
   useEffect(() => {
     currentStepIndexRef.current = currentStepIndex;
   }, [currentStepIndex]);
@@ -352,7 +356,7 @@ export default function RouteMapPage() {
     const originMarker = new H.map.Marker({ lat: o.lat, lng: o.lng });
     const destMarker = new H.map.Marker({ lat: d.lat, lng: d.lng });
     mapObjectsGroup.current.addObjects([routeLine, originMarker, destMarker]);
-    if (!isNavigating) {
+    if (!isNavigatingRef.current) {
       map.getViewModel().setLookAtData({ bounds: mapObjectsGroup.current.getBoundingBox() });
     }
   }
@@ -380,7 +384,7 @@ export default function RouteMapPage() {
   }
 
   function buildTurnPhrase(step) {
-    return (step.instruction || "continue on the route").replace(/\.\s*Go for.*$/i, "");
+    return step.instruction || "continue on the route";
   }
 
   const FAR_ANNOUNCE_METERS = 804; // ~0.5 mi
@@ -513,9 +517,17 @@ export default function RouteMapPage() {
       setIsRerouting(false);
     }
   }
-  function checkOffRoute(lat, lng, accuracy) {
+  function checkOffRoute(lat, lng, accuracy, speed) {
     if (rerouteLockRef.current) return;
     if (Date.now() - lastRerouteRef.current < REROUTE_COOLDOWN_MS) return;
+    // If you're not actually moving, don't evaluate off-route at all.
+    // Parked in a lot, depot, or rest area can legitimately sit >150m from
+    // the nearest routable road — that's not a reason to reroute.
+    const isMoving = typeof speed === "number" && speed > 1; // ~2.2 mph
+    if (!isMoving) {
+      offRouteStreakRef.current = 0;
+      return;
+    }
     // A single fuzzy fix (common right after starting nav, or parked near
     // buildings/trees) shouldn't be able to trigger a reroute on its own.
     if (typeof accuracy === "number" && accuracy > MAX_ACCURACY_FOR_REROUTE_METERS) {
@@ -552,7 +564,7 @@ export default function RouteMapPage() {
       viewModel.setLookAtData(lookAt);
     }
     checkForAnnouncement(lat, lng);
-    checkOffRoute(lat, lng, pos.coords.accuracy);
+    checkOffRoute(lat, lng, pos.coords.accuracy, pos.coords.speed);
   }
 
   function handleGeoError(err) {
