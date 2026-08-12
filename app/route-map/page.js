@@ -97,6 +97,7 @@ export default function RouteMapPage() {
   const isNavigatingRef = useRef(false);
   const lastPositionRef = useRef(null);
   const justRecenteredRef = useRef(true);
+  const searchBiasRef = useRef(null);
   const [mapsReady, setMapsReady] = useState(false);
 
   useEffect(() => {
@@ -123,6 +124,18 @@ export default function RouteMapPage() {
   useEffect(() => {
     checkAccess();
   }, []);
+  useEffect(() => {
+    if (!hasAccess || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        searchBiasRef.current = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      },
+      () => {
+        // silent — search just falls back to the nationwide default bias
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+    );
+  }, [hasAccess]);
 
   async function checkAccess() {
     const {
@@ -248,7 +261,13 @@ export default function RouteMapPage() {
       return;
     }
     try {
-      const res = await fetch(`/api/here/autocomplete?q=${encodeURIComponent(q)}`);
+      const params = new URLSearchParams({ q });
+      const bias = searchBiasRef.current;
+      if (bias) {
+        params.set("lat", bias.lat);
+        params.set("lng", bias.lng);
+      }
+      const res = await fetch(`/api/here/autocomplete?${params.toString()}`);
       const data = await res.json();
       const items = (data.items || []).filter((i) => i.lat !== null && i.lng !== null);
       kind === "origin" ? setOriginSuggestions(items) : setDestSuggestions(items);
