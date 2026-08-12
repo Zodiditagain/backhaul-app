@@ -12,6 +12,7 @@ import {
   VolumeX,
   Locate,
   XCircle,
+  RefreshCw,
 } from "lucide-react";
 import { decode as decodeFlexPolyline } from "@here/flexpolyline";
 import { supabase } from "../../lib/supabaseClient";
@@ -27,6 +28,9 @@ function haversineMeters(lat1, lng1, lat2, lng2) {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
+
+const OFF_ROUTE_METERS = 150;
+const REROUTE_COOLDOWN_MS = 20000;
 
 export default function RouteMapPage() {
   const router = useRouter();
@@ -57,6 +61,7 @@ export default function RouteMapPage() {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [navError, setNavError] = useState("");
+  const [isRerouting, setIsRerouting] = useState(false);
 
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
@@ -70,6 +75,10 @@ export default function RouteMapPage() {
   const currentStepIndexRef = useRef(0);
   const actionPointsRef = useRef([]);
   const voiceEnabledRef = useRef(true);
+  const destinationRef = useRef(null);
+  const truckSpecsRef = useRef(null);
+  const rerouteLockRef = useRef(false);
+  const lastRerouteRef = useRef(0);
 
   const [mapsReady, setMapsReady] = useState(false);
 
@@ -88,6 +97,14 @@ export default function RouteMapPage() {
   useEffect(() => {
     voiceEnabledRef.current = voiceEnabled;
   }, [voiceEnabled]);
+
+  useEffect(() => {
+    destinationRef.current = destination;
+  }, [destination]);
+
+  useEffect(() => {
+    truckSpecsRef.current = truckSpecs;
+  }, [truckSpecs]);
 
   useEffect(() => {
     checkAccess();
@@ -312,7 +329,10 @@ export default function RouteMapPage() {
     const destMarker = new H.map.Marker({ lat: d.lat, lng: d.lng });
 
     mapObjectsGroup.current.addObjects([routeLine, originMarker, destMarker]);
-    map.getViewModel().setLookAtData({ bounds: mapObjectsGroup.current.getBoundingBox() });
+
+    if (!isNavigating) {
+      map.getViewModel().setLookAtData({ bounds: mapObjectsGroup.current.getBoundingBox() });
+    }
   }
 
   function updateTruckMarker(lat, lng) {
@@ -353,16 +373,76 @@ export default function RouteMapPage() {
     }
   }
 
- function handlePositionUpdate(pos) {
+  function nearestDistanceToRoute(lat, lng) {
+    const pts = decodedPointsRef.current;
+    if (!pts.length) return Infinity;
+    let min = Infinity;
+    for (let i = 0; i < pts.length; i += 5) {
+      const d = haversineMeters(lat, lng, pts[i][0], pts[i][1]);
+      if (d < min) min = d;
+    }
+    return min;
+  }
+
+  async function performReroute(lat, lng) {
+    if (rerouteLockRef.current) return;
+    const dest = destinationRef.current;
+    if (!dest) return;
+
+    rerouteLockRef.current = true;
+    setIsRerouting(true);
+
+    if (voiceEnabledRef.current && window.speechSynthesis) {
+      const utter = new SpeechSynthesisUtterance("Rerouting.");
+      window.speechSynthesis.speak(utter);
+    }
+
+    try {
+      const res = await fetch("/api/here/route", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          origin: { lat, lng },
+          destination: dest,
+          truckSpecs: truckSpecsRef.current,
+        }),
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        setRouteResult(data);
+        drawRoute(data.polyline, { lat, lng }, dest);
+      }
+    } catch {
+      // silent fail — will retry on next off-route check after cooldown
+    } finally {
+      rerouteLockRef.current = false;
+      lastRerouteRef.current = Date.now();
+      setIsRerouting(false);
+    }
+  }
+
+  function checkOffRoute(lat, lng) {
+    if (rerouteLockRef.current) return;
+    if (Date.now() - lastRerouteRef.current < REROUTE_COOLDOWN_MS) return;
+    const dist = nearestDistanceToRoute(lat, lng);
+    if (dist > OFF_ROUTE_METERS) {
+      performReroute(lat, lng);
+    }
+  }
+
+  function handlePositionUpdate(pos) {
     setNavError("");
     const lat = pos.coords.latitude;
     const lng = pos.coords.longitude;
-    setCurrentPosition({ lat, lng });    updateTruckMarker(lat, lng);
+    setCurrentPosition({ lat, lng });
+    updateTruckMarker(lat, lng);
     if (followModeRef.current && mapInstance.current) {
       mapInstance.current.setCenter({ lat, lng });
       mapInstance.current.setZoom(17);
     }
     checkForAnnouncement(lat, lng);
+    checkOffRoute(lat, lng);
   }
 
   function handleGeoError(err) {
@@ -384,6 +464,7 @@ export default function RouteMapPage() {
     setIsNavigating(true);
     setFollowMode(true);
     setCurrentStepIndex(0);
+    lastRerouteRef.current = 0;
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       handlePositionUpdate,
@@ -399,6 +480,7 @@ export default function RouteMapPage() {
     }
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     setIsNavigating(false);
+    setIsRerouting(false);
     setCurrentPosition(null);
     if (truckMarkerRef.current && mapInstance.current) {
       mapInstance.current.removeObject(truckMarkerRef.current);
@@ -545,6 +627,13 @@ export default function RouteMapPage() {
           <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/30 rounded-md py-2 px-3 mb-4">
             <AlertCircle size={14} />
             <span>{navError}</span>
+          </div>
+        )}
+
+        {isRerouting && (
+          <div className="flex items-center gap-2 text-amber-400 text-sm bg-amber-500/10 border border-amber-500/30 rounded-md py-2 px-3 mb-4">
+            <RefreshCw size={14} className="animate-spin" />
+            <span>Rerouting...</span>
           </div>
         )}
 
