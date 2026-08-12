@@ -71,7 +71,7 @@ export default function RouteMapPage() {
   const decodedPointsRef = useRef([]);
   const watchIdRef = useRef(null);
 
-  const followModeRef = useRef(true);
+const followModeRef = useRef(true);
   const currentStepIndexRef = useRef(0);
   const actionPointsRef = useRef([]);
   const voiceEnabledRef = useRef(true);
@@ -79,7 +79,7 @@ export default function RouteMapPage() {
   const truckSpecsRef = useRef(null);
   const rerouteLockRef = useRef(false);
   const lastRerouteRef = useRef(0);
-
+  const announceStagesRef = useRef({});
   const [mapsReady, setMapsReady] = useState(false);
 
   useEffect(() => {
@@ -219,7 +219,7 @@ export default function RouteMapPage() {
     return () => window.removeEventListener("resize", resizeHandler);
   }, [mapsReady]);
 
-  useEffect(() => {
+ useEffect(() => {
     if (!routeResult) {
       setActionPoints([]);
       return;
@@ -232,8 +232,8 @@ export default function RouteMapPage() {
     });
     setActionPoints(pts);
     setCurrentStepIndex(0);
-  }, [routeResult]);
-  const fetchSuggestions = useCallback(async (q, kind) => {
+    announceStagesRef.current = {};
+  }, [routeResult]);  const fetchSuggestions = useCallback(async (q, kind) => {
     if (q.trim().length < 3) {
       kind === "origin" ? setOriginSuggestions([]) : setDestSuggestions([]);
       return;
@@ -351,6 +351,28 @@ export default function RouteMapPage() {
     }
   }
 
+function speak(text) {
+    if (voiceEnabledRef.current && window.speechSynthesis) {
+      const utter = new SpeechSynthesisUtterance(text);
+      window.speechSynthesis.speak(utter);
+    }
+  }
+
+  function buildTurnPhrase(step) {
+    if (step.direction) {
+      return `turn ${step.direction}${step.roadName ? " onto " + step.roadName : ""}`;
+    }
+    if (step.actionType === "arrive") return "you have arrived at your destination";
+    if (step.actionType === "depart") {
+      return step.roadName ? `head onto ${step.roadName}` : "continue straight";
+    }
+    return (step.instruction || "").replace(/\.\s*Go for.*$/i, "").toLowerCase();
+  }
+
+  const FAR_ANNOUNCE_METERS = 804; // ~0.5 mi
+  const NEAR_ANNOUNCE_METERS = 91; // ~300 ft
+  const ADVANCE_METERS = 40;
+
   function checkForAnnouncement(lat, lng) {
     const idx = currentStepIndexRef.current;
     const pts = actionPointsRef.current;
@@ -362,17 +384,24 @@ export default function RouteMapPage() {
       return;
     }
     const dist = haversineMeters(lat, lng, step.lat, step.lng);
-    if (dist < 150) {
-      if (voiceEnabledRef.current && window.speechSynthesis) {
-        const utter = new SpeechSynthesisUtterance(step.instruction);
-        window.speechSynthesis.speak(utter);
-      }
+    const stageState = announceStagesRef.current[idx] || {};
+
+    if (dist <= FAR_ANNOUNCE_METERS && !stageState.far) {
+      speak(`In a half mile, ${buildTurnPhrase(step)}.`);
+      stageState.far = true;
+    }
+    if (dist <= NEAR_ANNOUNCE_METERS && !stageState.near) {
+      speak(`In 300 feet, ${buildTurnPhrase(step)}.`);
+      stageState.near = true;
+    }
+    announceStagesRef.current[idx] = stageState;
+
+    if (dist <= ADVANCE_METERS) {
       const next = idx + 1;
       currentStepIndexRef.current = next;
       setCurrentStepIndex(next);
     }
   }
-
   function nearestDistanceToRoute(lat, lng) {
     const pts = decodedPointsRef.current;
     if (!pts.length) return Infinity;
