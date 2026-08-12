@@ -13,8 +13,9 @@ import {
   Locate,
   XCircle,
   RefreshCw,
+  ArrowLeft,
 } from "lucide-react";
-import { decode as decodeFlexPolyline } from "@here/flexpolyline";
+import Link from "next/link";import { decode as decodeFlexPolyline } from "@here/flexpolyline";
 import { supabase } from "../../lib/supabaseClient";
 
 function haversineMeters(lat1, lng1, lat2, lng2) {
@@ -460,20 +461,25 @@ function speak(text) {
     }
   }
 
-  function handlePositionUpdate(pos) {
+function handlePositionUpdate(pos) {
     setNavError("");
     const lat = pos.coords.latitude;
     const lng = pos.coords.longitude;
+    const heading = pos.coords.heading;
     setCurrentPosition({ lat, lng });
     updateTruckMarker(lat, lng);
     if (followModeRef.current && mapInstance.current) {
-      mapInstance.current.setCenter({ lat, lng });
-      mapInstance.current.setZoom(17);
+      const viewModel = mapInstance.current.getViewModel();
+      const lookAt = { position: { lat, lng }, zoom: 17 };
+      if (typeof heading === "number" && !isNaN(heading)) {
+        lookAt.heading = heading;
+        lookAt.tilt = 55;
+      }
+      viewModel.setLookAtData(lookAt);
     }
     checkForAnnouncement(lat, lng);
     checkOffRoute(lat, lng);
   }
-
   function handleGeoError(err) {
     setNavError("Couldn't get your location: " + err.message);
   }
@@ -553,14 +559,20 @@ function speak(text) {
     );
   }
 
-  return (
+ return (
     <div className="min-h-screen bg-slate-950 px-6 py-10">
       <div className="max-w-5xl mx-auto">
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-1.5 text-gray-400 hover:text-white text-xs font-medium uppercase tracking-wide mb-4"
+        >
+          <ArrowLeft size={14} />
+          Back to Dashboard
+        </Link>
         <div className="flex items-center gap-2 mb-2">
           <Truck size={22} className="text-blue-400" />
           <h1 className="text-2xl font-bold text-white">Route Map</h1>
         </div>
-
         {hasTruckSpecs ? (
           <p className="text-xs text-amber-400 mb-6">
             Routing with your truck specs — restricted roads and low bridges will be avoided.
