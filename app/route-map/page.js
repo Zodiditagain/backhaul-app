@@ -738,15 +738,19 @@ function handlePositionUpdate(pos) {
           </div>
         )}
 
-        {isNavigating && currentStep && (
+      {isNavigating && currentStep && (
           <div className="bg-blue-600 rounded-md px-4 py-4 mb-4">
             <p className="text-xs text-blue-200 uppercase tracking-wide mb-1">Next</p>
             <p className="text-lg font-semibold text-white leading-snug">
               {currentStep.instruction}
             </p>
+            {currentPosition && (
+              <p className="text-xs text-blue-200 mt-2 font-mono">
+                DEBUG — step {currentStepIndex + 1}/{actionPoints.length} · target: {currentStep.lat?.toFixed(5)},{currentStep.lng?.toFixed(5)} · dist: {Math.round(haversineMeters(currentPosition.lat, currentPosition.lng, currentStep.lat, currentStep.lng))}m
+              </p>
+            )}
           </div>
         )}
-
         {routeResult && !isNavigating && (
           <div className="bg-slate-900 border border-slate-800 rounded-md mb-4 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 flex-wrap gap-2">
