@@ -69,9 +69,9 @@ export default function RouteMapPage() {
   const platformRef = useRef(null);
   const mapObjectsGroup = useRef(null);
   const truckMarkerRef = useRef(null);
-  const decodedPointsRef = useRef([]);
+const decodedPointsRef = useRef([]);
+  const cumulativeDistancesRef = useRef([]);
   const watchIdRef = useRef(null);
-
 const followModeRef = useRef(true);
   const currentStepIndexRef = useRef(0);
   const actionPointsRef = useRef([]);
@@ -225,13 +225,18 @@ const followModeRef = useRef(true);
       setActionPoints([]);
       return;
     }
-    const points = decodedPointsRef.current;
+   const points = decodedPointsRef.current;
+    const cum = cumulativeDistancesRef.current;
     const pts = (routeResult.actions || []).map((a) => {
       const idx = Math.min(a.offset ?? 0, points.length - 1);
       const p = points[idx];
-      return { ...a, lat: p ? p[0] : null, lng: p ? p[1] : null };
-    });
-    setActionPoints(pts);
+      return {
+        ...a,
+        lat: p ? p[0] : null,
+        lng: p ? p[1] : null,
+        distAlongRoute: cum[idx] ?? 0,
+      };
+    });    setActionPoints(pts);
     setCurrentStepIndex(0);
     announceStagesRef.current = {};
   }, [routeResult]);  const fetchSuggestions = useCallback(async (q, kind) => {
@@ -347,11 +352,22 @@ const [locatingOrigin, setLocatingOrigin] = useState(false);
 
     mapObjectsGroup.current.removeAll();
 
-    const decoded = decodeFlexPolyline(polyline);
+const decoded = decodeFlexPolyline(polyline);
     decodedPointsRef.current = decoded.polyline;
 
-    const lineString = new H.geo.LineString();
-    decoded.polyline.forEach(([lat, lng]) => {
+    const cum = [0];
+    for (let i = 1; i < decoded.polyline.length; i++) {
+      const d = haversineMeters(
+        decoded.polyline[i - 1][0],
+        decoded.polyline[i - 1][1],
+        decoded.polyline[i][0],
+        decoded.polyline[i][1]
+      );
+      cum.push(cum[i - 1] + d);
+    }
+    cumulativeDistancesRef.current = cum;
+
+    const lineString = new H.geo.LineString();    decoded.polyline.forEach(([lat, lng]) => {
       lineString.pushPoint({ lat, lng });
     });
 
@@ -399,7 +415,7 @@ function buildTurnPhrase(step) {
   const NEAR_ANNOUNCE_METERS = 91; // ~300 ft
   const ADVANCE_METERS = 40;
 
-  function checkForAnnouncement(lat, lng) {
+function checkForAnnouncement(lat, lng) {
     const idx = currentStepIndexRef.current;
     const pts = actionPointsRef.current;
     if (idx >= pts.length) return;
@@ -409,14 +425,15 @@ function buildTurnPhrase(step) {
       setCurrentStepIndex(idx + 1);
       return;
     }
-    const dist = haversineMeters(lat, lng, step.lat, step.lng);
+    const myAlong = projectPositionAlongRoute(lat, lng);
+    const dist = step.distAlongRoute - myAlong;
     const stageState = announceStagesRef.current[idx] || {};
 
-    if (dist <= FAR_ANNOUNCE_METERS && !stageState.far) {
+    if (dist <= FAR_ANNOUNCE_METERS && dist > NEAR_ANNOUNCE_METERS && !stageState.far) {
       speak(`In a half mile, ${buildTurnPhrase(step)}.`);
       stageState.far = true;
     }
-    if (dist <= NEAR_ANNOUNCE_METERS && !stageState.near) {
+    if (dist <= NEAR_ANNOUNCE_METERS && dist > 0 && !stageState.near) {
       speak(`In 300 feet, ${buildTurnPhrase(step)}.`);
       stageState.near = true;
     }
@@ -427,8 +444,7 @@ function buildTurnPhrase(step) {
       currentStepIndexRef.current = next;
       setCurrentStepIndex(next);
     }
-  }
-function pointToSegmentMeters(lat, lng, lat1, lng1, lat2, lng2) {
+  }function pointToSegmentMeters(lat, lng, lat1, lng1, lat2, lng2) {
     const R = 6371000;
     const toRad = (d) => (d * Math.PI) / 180;
     const latRef = toRad(lat1);
@@ -448,7 +464,7 @@ function pointToSegmentMeters(lat, lng, lat1, lng1, lat2, lng2) {
     return Math.sqrt(ddx * ddx + ddy * ddy);
   }
 
-  function nearestDistanceToRoute(lat, lng) {
+function nearestDistanceToRoute(lat, lng) {
     const pts = decodedPointsRef.current;
     if (pts.length < 2) return Infinity;
     let min = Infinity;
@@ -459,7 +475,44 @@ function pointToSegmentMeters(lat, lng, lat1, lng1, lat2, lng2) {
     }
     return min;
   }
-  async function performReroute(lat, lng) {
+
+  function projectPositionAlongRoute(lat, lng) {
+    const pts = decodedPointsRef.current;
+    const cum = cumulativeDistancesRef.current;
+    if (pts.length < 2) return 0;
+
+    const R = 6371000;
+    const toRad = (d) => (d * Math.PI) / 180;
+
+    let bestDist = Infinity;
+    let bestAlong = 0;
+
+    for (let i = 0; i < pts.length - 1; i++) {
+      const latRef = toRad(pts[i][0]);
+      const x = (lo) => R * toRad(lo) * Math.cos(latRef);
+      const y = (la) => R * toRad(la);
+
+      const px = x(lng), py = y(lat);
+      const ax = x(pts[i][1]), ay = y(pts[i][0]);
+      const bx = x(pts[i + 1][1]), by = y(pts[i + 1][0]);
+
+      const dx = bx - ax, dy = by - ay;
+      const lengthSq = dx * dx + dy * dy;
+      let t = lengthSq === 0 ? 0 : ((px - ax) * dx + (py - ay) * dy) / lengthSq;
+      t = Math.max(0, Math.min(1, t));
+      const cx = ax + t * dx, cy = ay + t * dy;
+      const ddx = px - cx, ddy = py - cy;
+      const dist = Math.sqrt(ddx * ddx + ddy * ddy);
+
+      if (dist < bestDist) {
+        bestDist = dist;
+        const segLen = (cum[i + 1] ?? 0) - (cum[i] ?? 0);
+        bestAlong = (cum[i] ?? 0) + t * segLen;
+      }
+    }
+
+    return bestAlong;
+  }  async function performReroute(lat, lng) {
     if (rerouteLockRef.current) return;
     const dest = destinationRef.current;
     if (!dest) return;
@@ -744,12 +797,11 @@ function handlePositionUpdate(pos) {
             <p className="text-lg font-semibold text-white leading-snug">
               {currentStep.instruction}
             </p>
-            {currentPosition && (
+         {currentPosition && (
               <p className="text-xs text-blue-200 mt-2 font-mono">
-                DEBUG — step {currentStepIndex + 1}/{actionPoints.length} · target: {currentStep.lat?.toFixed(5)},{currentStep.lng?.toFixed(5)} · dist: {Math.round(haversineMeters(currentPosition.lat, currentPosition.lng, currentStep.lat, currentStep.lng))}m
+                DEBUG — step {currentStepIndex + 1}/{actionPoints.length} · along-route dist: {Math.round(currentStep.distAlongRoute - projectPositionAlongRoute(currentPosition.lat, currentPosition.lng))}m
               </p>
-            )}
-          </div>
+            )}        </div>
         )}
         {routeResult && !isNavigating && (
           <div className="bg-slate-900 border border-slate-800 rounded-md mb-4 overflow-hidden">
