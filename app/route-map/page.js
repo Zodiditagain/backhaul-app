@@ -403,17 +403,37 @@ function speak(text) {
       setCurrentStepIndex(next);
     }
   }
+function pointToSegmentMeters(lat, lng, lat1, lng1, lat2, lng2) {
+    const R = 6371000;
+    const toRad = (d) => (d * Math.PI) / 180;
+    const latRef = toRad(lat1);
+    const x = (lo) => R * toRad(lo) * Math.cos(latRef);
+    const y = (la) => R * toRad(la);
+
+    const px = x(lng), py = y(lat);
+    const ax = x(lng1), ay = y(lat1);
+    const bx = x(lng2), by = y(lat2);
+
+    const dx = bx - ax, dy = by - ay;
+    const lengthSq = dx * dx + dy * dy;
+    let t = lengthSq === 0 ? 0 : ((px - ax) * dx + (py - ay) * dy) / lengthSq;
+    t = Math.max(0, Math.min(1, t));
+    const cx = ax + t * dx, cy = ay + t * dy;
+    const ddx = px - cx, ddy = py - cy;
+    return Math.sqrt(ddx * ddx + ddy * ddy);
+  }
+
   function nearestDistanceToRoute(lat, lng) {
     const pts = decodedPointsRef.current;
-    if (!pts.length) return Infinity;
+    if (pts.length < 2) return Infinity;
     let min = Infinity;
-    for (let i = 0; i < pts.length; i += 5) {
-      const d = haversineMeters(lat, lng, pts[i][0], pts[i][1]);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const d = pointToSegmentMeters(lat, lng, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]);
       if (d < min) min = d;
+      if (min < 5) break;
     }
     return min;
   }
-
   async function performReroute(lat, lng) {
     if (rerouteLockRef.current) return;
     const dest = destinationRef.current;
@@ -422,12 +442,13 @@ function speak(text) {
     rerouteLockRef.current = true;
     setIsRerouting(true);
 
+  if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
     if (voiceEnabledRef.current && window.speechSynthesis) {
       const utter = new SpeechSynthesisUtterance("Rerouting.");
       window.speechSynthesis.speak(utter);
-    }
-
-    try {
+    }    try {
       const res = await fetch("/api/here/route", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
