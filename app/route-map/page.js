@@ -392,17 +392,9 @@ function speak(text) {
     }
   }
 
-  function buildTurnPhrase(step) {
-    if (step.direction) {
-      return `turn ${step.direction}${step.roadName ? " onto " + step.roadName : ""}`;
-    }
-    if (step.actionType === "arrive") return "you have arrived at your destination";
-    if (step.actionType === "depart") {
-      return step.roadName ? `head onto ${step.roadName}` : "continue straight";
-    }
-    return (step.instruction || "").replace(/\.\s*Go for.*$/i, "").toLowerCase();
+function buildTurnPhrase(step) {
+    return (step.instruction || "continue on the route").replace(/\.\s*Go for.*$/i, "");
   }
-
   const FAR_ANNOUNCE_METERS = 804; // ~0.5 mi
   const NEAR_ANNOUNCE_METERS = 91; // ~300 ft
   const ADVANCE_METERS = 40;
