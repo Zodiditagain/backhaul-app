@@ -61,8 +61,8 @@ export async function POST(req) {
 
     const actions = (section.actions || []).map((a) => {
       let fallback = a.action || "Continue";
+      const roadName = a.nextRoad?.name?.[0]?.value || a.currentRoad?.name?.[0]?.value || null;
       if (a.direction) fallback = `Turn ${a.direction}`;
-      const roadName = a.nextRoad?.name?.[0]?.value || a.currentRoad?.name?.[0]?.value;
       if (roadName) fallback += ` onto ${roadName}`;
 
       return {
@@ -70,17 +70,21 @@ export async function POST(req) {
         distanceMeters: a.length ?? 0,
         durationSeconds: a.duration ?? 0,
         offset: a.offset ?? 0,
+        direction: a.direction || null,
+        roadName,
+        actionType: a.action || null,
       };
     });
 
- return NextResponse.json({
+    return NextResponse.json({
       distanceMeters: section.summary.length,
       durationSeconds: section.summary.duration,
       polyline: section.polyline,
       actions,
       usedTruckRestrictions: !!truckSpecs,
       notices: section.notices || [],
-    });  } catch (err) {
+    });
+  } catch (err) {
     return NextResponse.json({ error: "Failed to reach HERE API", details: String(err) }, { status: 502 });
   }
 }
