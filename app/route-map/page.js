@@ -14,8 +14,8 @@ import {
   XCircle,
   RefreshCw,
   ArrowLeft,
-} from "lucide-react";
-import Link from "next/link";import { decode as decodeFlexPolyline } from "@here/flexpolyline";
+  Crosshair,
+} from "lucide-react";import Link from "next/link";import { decode as decodeFlexPolyline } from "@here/flexpolyline";
 import { supabase } from "../../lib/supabaseClient";
 
 function haversineMeters(lat1, lng1, lat2, lng2) {
@@ -272,8 +272,41 @@ const followModeRef = useRef(true);
       setShowDestList(false);
     }
   }
+const [locatingOrigin, setLocatingOrigin] = useState(false);
 
-  async function handleGetRoute() {
+  function useCurrentLocationAsOrigin() {
+    if (!navigator.geolocation) {
+      setError("Geolocation isn't available on this device or browser.");
+      return;
+    }
+    setLocatingOrigin(true);
+    setError("");
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        try {
+          const res = await fetch(`/api/here/reverse?lat=${lat}&lng=${lng}`);
+          const data = await res.json();
+          const address = data.address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+          setOrigin({ lat, lng, address });
+          setOriginQuery(address);
+          setShowOriginList(false);
+        } catch {
+          setOrigin({ lat, lng, address: `${lat.toFixed(5)}, ${lng.toFixed(5)}` });
+          setOriginQuery(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+        } finally {
+          setLocatingOrigin(false);
+        }
+      },
+      (err) => {
+        setError("Couldn't get your location: " + err.message);
+        setLocatingOrigin(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }  async function handleGetRoute() {
     if (!origin || !destination) {
       setError("Choose both an origin and a destination from the suggestions.");
       return;
@@ -607,8 +640,23 @@ function handlePositionUpdate(pos) {
 
         {!isNavigating && (
           <div className="grid md:grid-cols-2 gap-4 mb-4">
-            <div className="relative">
-              <label className="block text-xs font-medium text-gray-400 mb-1">Origin</label>
+           <div className="relative">
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-gray-400">Origin</label>
+                <button
+                  type="button"
+                  onClick={useCurrentLocationAsOrigin}
+                  disabled={locatingOrigin}
+                  className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 disabled:text-gray-600"
+                >
+                  {locatingOrigin ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <Crosshair size={12} />
+                  )}
+                  Use Current Location
+                </button>
+              </div>
               <input
                 value={originQuery}
                 onChange={(e) => {
@@ -619,8 +667,7 @@ function handlePositionUpdate(pos) {
                 onFocus={() => setShowOriginList(true)}
                 placeholder="Enter a city, address, or zip"
                 className="w-full bg-slate-900 border border-slate-800 text-white text-sm rounded-md py-2.5 px-3 focus:outline-none focus:border-blue-500"
-              />
-              {showOriginList && originSuggestions.length > 0 && (
+              />              {showOriginList && originSuggestions.length > 0 && (
                 <div className="absolute z-10 mt-1 w-full bg-slate-900 border border-slate-800 rounded-md overflow-hidden shadow-lg">
                   {originSuggestions.map((s) => (
                     <button
