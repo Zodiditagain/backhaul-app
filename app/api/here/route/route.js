@@ -73,14 +73,14 @@ export async function POST(req) {
       };
     });
 
-    return NextResponse.json({
+ return NextResponse.json({
       distanceMeters: section.summary.length,
       durationSeconds: section.summary.duration,
       polyline: section.polyline,
       actions,
       usedTruckRestrictions: !!truckSpecs,
-    });
-  } catch (err) {
+      notices: section.notices || [],
+    });  } catch (err) {
     return NextResponse.json({ error: "Failed to reach HERE API", details: String(err) }, { status: 502 });
   }
 }
