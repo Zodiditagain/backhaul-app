@@ -14,6 +14,7 @@ import {
   RefreshCw,
   ArrowLeft,
   Crosshair,
+  Layers,
 } from "lucide-react";
 import Link from "next/link";
 import { decode as decodeFlexPolyline } from "@here/flexpolyline";
@@ -31,9 +32,20 @@ function haversineMeters(lat1, lng1, lat2, lng2) {
   return R * c;
 }
 
+function bearingDegrees(lat1, lng1, lat2, lng2) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const toDeg = (r) => (r * 180) / Math.PI;
+  const y = Math.sin(toRad(lng2 - lng1)) * Math.cos(toRad(lat2));
+  const x =
+    Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+    Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(toRad(lng2 - lng1));
+  const brng = toDeg(Math.atan2(y, x));
+  return (brng + 360) % 360;
+}
+
 const OFF_ROUTE_METERS = 150;
 const REROUTE_COOLDOWN_MS = 20000;
-const OFF_ROUTE_CONFIRM_COUNT = 3;
+const OFF_ROUTE_CONFIRM_COUNT = 1;
 const MAX_ACCURACY_FOR_REROUTE_METERS = 100;
 
 export default function RouteMapPage() {
@@ -61,10 +73,12 @@ export default function RouteMapPage() {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [navError, setNavError] = useState("");
   const [isRerouting, setIsRerouting] = useState(false);
+  const [satelliteView, setSatelliteView] = useState(false);
 
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const platformRef = useRef(null);
+  const defaultLayersRef = useRef(null);
   const mapObjectsGroup = useRef(null);
   const truckMarkerRef = useRef(null);
   const decodedPointsRef = useRef([]);
@@ -81,6 +95,8 @@ export default function RouteMapPage() {
   const offRouteStreakRef = useRef(0);
   const announceStagesRef = useRef({});
   const isNavigatingRef = useRef(false);
+  const lastPositionRef = useRef(null);
+  const justRecenteredRef = useRef(true);
   const [mapsReady, setMapsReady] = useState(false);
 
   useEffect(() => {
@@ -186,6 +202,7 @@ export default function RouteMapPage() {
     const platform = new H.service.Platform({ apikey });
     platformRef.current = platform;
     const defaultLayers = platform.createDefaultLayers();
+    defaultLayersRef.current = defaultLayers;
     const map = new H.Map(mapRef.current, defaultLayers.vector.normal.map, {
       center: { lat: 39.8283, lng: -98.5795 },
       zoom: 4,
@@ -361,6 +378,15 @@ export default function RouteMapPage() {
     }
   }
 
+  function toggleSatellite() {
+    const layers = defaultLayersRef.current;
+    const map = mapInstance.current;
+    if (!layers || !map) return;
+    const next = !satelliteView;
+    map.setBaseLayer(next ? layers.raster.satellite.map : layers.vector.normal.map);
+    setSatelliteView(next);
+  }
+
   function updateTruckMarker(lat, lng) {
     const H = window.H;
     const map = mapInstance.current;
@@ -517,19 +543,18 @@ export default function RouteMapPage() {
       setIsRerouting(false);
     }
   }
-  function checkOffRoute(lat, lng, accuracy, speed) {
+  function checkOffRoute(lat, lng, accuracy, movedMeters) {
     if (rerouteLockRef.current) return;
     if (Date.now() - lastRerouteRef.current < REROUTE_COOLDOWN_MS) return;
-    // If you're not actually moving, don't evaluate off-route at all.
-    // Parked in a lot, depot, or rest area can legitimately sit >150m from
-    // the nearest routable road — that's not a reason to reroute.
-    const isMoving = typeof speed === "number" && speed > 1; // ~2.2 mph
-    if (!isMoving) {
+    // If we haven't meaningfully moved since the last fix, don't evaluate
+    // off-route at all. This covers being parked anywhere — a lot, a depot,
+    // a rest area — without depending on the browser reporting speed, which
+    // a lot of devices don't do reliably.
+    if (movedMeters === null || movedMeters === undefined || movedMeters < 3) {
       offRouteStreakRef.current = 0;
       return;
     }
-    // A single fuzzy fix (common right after starting nav, or parked near
-    // buildings/trees) shouldn't be able to trigger a reroute on its own.
+    // A single fuzzy fix shouldn't be trusted either.
     if (typeof accuracy === "number" && accuracy > MAX_ACCURACY_FOR_REROUTE_METERS) {
       return;
     }
@@ -539,8 +564,6 @@ export default function RouteMapPage() {
     } else {
       offRouteStreakRef.current = 0;
     }
-    // Require several consecutive off-route readings before rerouting, so
-    // one noisy GPS blip while stationary can't kick off a reroute loop.
     if (offRouteStreakRef.current >= OFF_ROUTE_CONFIRM_COUNT) {
       offRouteStreakRef.current = 0;
       performReroute(lat, lng);
@@ -551,12 +574,28 @@ export default function RouteMapPage() {
     setNavError("");
     const lat = pos.coords.latitude;
     const lng = pos.coords.longitude;
-    const heading = pos.coords.heading;
+    let heading = pos.coords.heading;
+    const prev = lastPositionRef.current;
+    const movedMeters = prev ? haversineMeters(prev.lat, prev.lng, lat, lng) : null;
+    // Many browsers (iOS Safari especially) never populate coords.heading.
+    // Fall back to computing our own bearing from the last GPS fix, but only
+    // once we've moved far enough that GPS noise won't dominate the result.
+    if ((typeof heading !== "number" || isNaN(heading)) && movedMeters !== null && movedMeters > 8) {
+      heading = bearingDegrees(prev.lat, prev.lng, lat, lng);
+    }
+    lastPositionRef.current = { lat, lng };
     setCurrentPosition({ lat, lng });
     updateTruckMarker(lat, lng);
     if (followModeRef.current && mapInstance.current) {
       const viewModel = mapInstance.current.getViewModel();
-      const lookAt = { position: { lat, lng }, zoom: 17 };
+      const lookAt = { position: { lat, lng } };
+      // Only force zoom right after starting nav or tapping re-center —
+      // otherwise this runs every GPS tick and overrides any pinch/button
+      // zoom you just did.
+      if (justRecenteredRef.current) {
+        lookAt.zoom = 17;
+        justRecenteredRef.current = false;
+      }
       if (typeof heading === "number" && !isNaN(heading)) {
         lookAt.heading = heading;
         lookAt.tilt = 55;
@@ -564,7 +603,7 @@ export default function RouteMapPage() {
       viewModel.setLookAtData(lookAt);
     }
     checkForAnnouncement(lat, lng);
-    checkOffRoute(lat, lng, pos.coords.accuracy, pos.coords.speed);
+    checkOffRoute(lat, lng, pos.coords.accuracy, movedMeters);
   }
 
   function handleGeoError(err) {
@@ -586,6 +625,8 @@ export default function RouteMapPage() {
     setCurrentStepIndex(0);
     lastRerouteRef.current = 0;
     offRouteStreakRef.current = 0;
+    lastPositionRef.current = null;
+    justRecenteredRef.current = true;
     watchIdRef.current = navigator.geolocation.watchPosition(
       handlePositionUpdate,
       handleGeoError,
@@ -610,6 +651,7 @@ export default function RouteMapPage() {
 
   function recenter() {
     setFollowMode(true);
+    justRecenteredRef.current = true;
     if (currentPosition && mapInstance.current) {
       mapInstance.current.setCenter(currentPosition);
       mapInstance.current.setZoom(17);
@@ -867,6 +909,13 @@ export default function RouteMapPage() {
             ref={mapRef}
             className="w-full h-[500px] rounded-md border border-slate-800 bg-slate-900"
           />
+          <button
+            onClick={toggleSatellite}
+            className="absolute top-4 right-4 flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800 text-white text-xs font-semibold uppercase tracking-wide px-3 py-2 rounded-full shadow-lg border border-slate-700"
+          >
+            <Layers size={14} />
+            {satelliteView ? "Map View" : "Satellite"}
+          </button>
           {isNavigating && !followMode && (
             <button
               onClick={recenter}
