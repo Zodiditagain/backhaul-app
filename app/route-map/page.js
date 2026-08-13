@@ -125,6 +125,7 @@ export default function RouteMapPage() {
   const mapObjectsGroup = useRef(null);
   const poiMarkersGroup = useRef(null);
   const truckMarkerRef = useRef(null);
+  const originMarkerRef = useRef(null);
   const decodedPointsRef = useRef([]);
   const cumulativeDistancesRef = useRef([]);
   const watchIdRef = useRef(null);
@@ -419,6 +420,7 @@ export default function RouteMapPage() {
     const map = mapInstance.current;
     if (!H || !map || !o || !d || !mapObjectsGroup.current) return;
     mapObjectsGroup.current.removeAll();
+    originMarkerRef.current = null;
     const decoded = decodeFlexPolyline(polyline);
     decodedPointsRef.current = decoded.polyline;
     const cum = [0];
@@ -439,9 +441,15 @@ export default function RouteMapPage() {
     const routeLine = new H.map.Polyline(lineString, {
       style: { lineWidth: 5, strokeColor: "#f59e0b" },
     });
-    const originMarker = new H.map.Marker({ lat: o.lat, lng: o.lng });
+    const objectsToAdd = [routeLine];
+    if (!isNavigatingRef.current) {
+      const originMarker = new H.map.Marker({ lat: o.lat, lng: o.lng });
+      originMarkerRef.current = originMarker;
+      objectsToAdd.push(originMarker);
+    }
     const destMarker = new H.map.Marker({ lat: d.lat, lng: d.lng });
-    mapObjectsGroup.current.addObjects([routeLine, originMarker, destMarker]);
+    objectsToAdd.push(destMarker);
+    mapObjectsGroup.current.addObjects(objectsToAdd);
     if (!isNavigatingRef.current) {
       map.getViewModel().setLookAtData({ bounds: mapObjectsGroup.current.getBoundingBox() });
     }
@@ -517,12 +525,15 @@ export default function RouteMapPage() {
     const map = mapInstance.current;
     if (!H || !map) return;
     if (!truckMarkerRef.current) {
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
-        <rect x="11" y="15" width="14" height="19" rx="2" fill="#3b82f6" stroke="white" stroke-width="2"/>
-        <rect x="9" y="3" width="18" height="13" rx="3" fill="#1d4ed8" stroke="white" stroke-width="2"/>
-        <rect x="12" y="6" width="12" height="5" rx="1" fill="#bfdbfe"/>
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="52" viewBox="0 0 40 52">
+        <rect x="8" y="16" width="24" height="32" rx="2" fill="#3b82f6" stroke="white" stroke-width="2"/>
+        <rect x="8" y="16" width="24" height="6" rx="2" fill="#93c5fd"/>
+        <rect x="26" y="16" width="6" height="32" fill="#1d4ed8" opacity="0.6"/>
+        <rect x="6" y="2" width="28" height="16" rx="4" fill="#1e3a8a" stroke="white" stroke-width="2"/>
+        <rect x="10" y="5" width="20" height="7" rx="2" fill="#bfdbfe"/>
+        <rect x="28" y="2" width="6" height="16" rx="2" fill="#1e293b" opacity="0.4"/>
       </svg>`;
-      const icon = new H.map.Icon(svg, { size: { w: 36, h: 36 }, anchor: { x: 18, y: 18 } });
+      const icon = new H.map.Icon(svg, { size: { w: 40, h: 52 }, anchor: { x: 20, y: 26 } });
       truckMarkerRef.current = new H.map.Marker({ lat, lng }, { icon });
       map.addObject(truckMarkerRef.current);
     } else {
@@ -726,6 +737,10 @@ export default function RouteMapPage() {
     if (voiceEnabled && window.speechSynthesis) {
       const greet = new SpeechSynthesisUtterance("Starting navigation.");
       window.speechSynthesis.speak(greet);
+    }
+    if (originMarkerRef.current && mapObjectsGroup.current) {
+      mapObjectsGroup.current.removeObject(originMarkerRef.current);
+      originMarkerRef.current = null;
     }
     setIsNavigating(true);
     setFollowMode(true);
