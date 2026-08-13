@@ -267,7 +267,6 @@ export default function RouteMapPage() {
       },
     });
     const rasterTileProvider = new H.service.rasterTile.Provider(rasterTileService, {
-      
       tileSize: 512,
     });
     satelliteLayerRef.current = new H.map.layer.TileLayer(rasterTileProvider);
@@ -518,9 +517,12 @@ export default function RouteMapPage() {
     const map = mapInstance.current;
     if (!H || !map) return;
     if (!truckMarkerRef.current) {
-      const svg =
-        '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26"><circle cx="13" cy="13" r="9" fill="#3b82f6" stroke="white" stroke-width="3"/></svg>';
-      const icon = new H.map.Icon(svg, { size: { w: 26, h: 26 }, anchor: { x: 13, y: 13 } });
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
+        <rect x="11" y="15" width="14" height="19" rx="2" fill="#3b82f6" stroke="white" stroke-width="2"/>
+        <rect x="9" y="3" width="18" height="13" rx="3" fill="#1d4ed8" stroke="white" stroke-width="2"/>
+        <rect x="12" y="6" width="12" height="5" rx="1" fill="#bfdbfe"/>
+      </svg>`;
+      const icon = new H.map.Icon(svg, { size: { w: 36, h: 36 }, anchor: { x: 18, y: 18 } });
       truckMarkerRef.current = new H.map.Marker({ lat, lng }, { icon });
       map.addObject(truckMarkerRef.current);
     } else {
