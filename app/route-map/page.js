@@ -487,10 +487,10 @@ export default function RouteMapPage() {
       const data = await res.json();
       const items = data.items || [];
       items.forEach((poi) => {
-        const icon = new H.map.Icon(poiIconSvg(poi.type), {
-          size: { w: 22, h: 22 },
-          anchor: { x: 11, y: 11 },
-        });
+    const icon = new H.map.Icon(poiIconSvg(poi.type), {
+      size: { w: 30, h: 30 },
+      anchor: { x: 15, y: 15 },
+    });        
         const marker = new H.map.Marker({ lat: poi.lat, lng: poi.lng }, { icon });
         marker.setData(poi);
         marker.addEventListener("tap", (evt) => {
