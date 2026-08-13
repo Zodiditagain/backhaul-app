@@ -80,17 +80,19 @@ function expandForSpeech(text) {
 }
 
 function poiIconSvg(type) {
-  const colors = {
-    truckStop: "#f97316",
-    weighStation: "#ef4444",
-    fuel: "#22c55e",
-    restArea: "#a855f7",
-    other: "#94a3b8",
+  const config = {
+    truckStop: { color: "#dc2626", emoji: "🚚" },
+    fuel: { color: "#2563eb", emoji: "⛽" },
+    weighStation: { color: "#eab308", emoji: "⚖️" },
+    restArea: { color: "#a855f7", emoji: "🅿️" },
+    other: { color: "#94a3b8", emoji: "📍" },
   };
-  const color = colors[type] || colors.other;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"><circle cx="11" cy="11" r="8" fill="${color}" stroke="white" stroke-width="2.5"/></svg>`;
+  const { color, emoji } = config[type] || config.other;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30">
+    <circle cx="15" cy="15" r="13" fill="${color}" stroke="white" stroke-width="2.5"/>
+    <text x="15" y="20" font-size="14" text-anchor="middle">${emoji}</text>
+  </svg>`;
 }
-
 const OFF_ROUTE_METERS = 150;
 const REROUTE_COOLDOWN_MS = 20000;
 const OFF_ROUTE_CONFIRM_COUNT = 1;
