@@ -525,15 +525,11 @@ export default function RouteMapPage() {
     const map = mapInstance.current;
     if (!H || !map) return;
     if (!truckMarkerRef.current) {
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="52" viewBox="0 0 40 52">
-        <rect x="8" y="16" width="24" height="32" rx="2" fill="#3b82f6" stroke="white" stroke-width="2"/>
-        <rect x="8" y="16" width="24" height="6" rx="2" fill="#93c5fd"/>
-        <rect x="26" y="16" width="6" height="32" fill="#1d4ed8" opacity="0.6"/>
-        <rect x="6" y="2" width="28" height="16" rx="4" fill="#1e3a8a" stroke="white" stroke-width="2"/>
-        <rect x="10" y="5" width="20" height="7" rx="2" fill="#bfdbfe"/>
-        <rect x="28" y="2" width="6" height="16" rx="2" fill="#1e293b" opacity="0.4"/>
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
+        <circle cx="17" cy="17" r="14" fill="#3b82f6" opacity="0.25"/>
+        <path d="M17 5 L26 27 L17 21 L8 27 Z" fill="#3b82f6" stroke="white" stroke-width="2.5" stroke-linejoin="round"/>
       </svg>`;
-      const icon = new H.map.Icon(svg, { size: { w: 40, h: 52 }, anchor: { x: 20, y: 26 } });
+      const icon = new H.map.Icon(svg, { size: { w: 34, h: 34 }, anchor: { x: 17, y: 17 } });
       truckMarkerRef.current = new H.map.Marker({ lat, lng }, { icon });
       map.addObject(truckMarkerRef.current);
     } else {
