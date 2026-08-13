@@ -18,7 +18,6 @@ import {
 import Link from "next/link";
 import { decode as decodeFlexPolyline } from "@here/flexpolyline";
 import { supabase } from "../../lib/supabaseClient";
-
 function haversineMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
   const toRad = (d) => (d * Math.PI) / 180;
@@ -30,7 +29,6 @@ function haversineMeters(lat1, lng1, lat2, lng2) {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
-
 function bearingDegrees(lat1, lng1, lat2, lng2) {
   const toRad = (d) => (d * Math.PI) / 180;
   const toDeg = (r) => (r * 180) / Math.PI;
@@ -41,7 +39,6 @@ function bearingDegrees(lat1, lng1, lat2, lng2) {
   const brng = toDeg(Math.atan2(y, x));
   return (brng + 360) % 360;
 }
-
 // Street-suffix / directional abbreviations expanded for speech only — the
 // on-screen turn-by-turn text stays exactly as HERE returns it.
 const SPEECH_ABBREVIATIONS = [
@@ -70,7 +67,6 @@ const SPEECH_ABBREVIATIONS = [
   [/\bE\.?\b/g, "East"],
   [/\bW\.?\b/g, "West"],
 ];
-
 function expandForSpeech(text) {
   let result = text;
   for (const [pattern, replacement] of SPEECH_ABBREVIATIONS) {
@@ -78,7 +74,6 @@ function expandForSpeech(text) {
   }
   return result;
 }
-
 function poiIconSvg(type) {
   const config = {
     truckStop: { color: "#dc2626", emoji: "🚚" },
@@ -97,7 +92,6 @@ const OFF_ROUTE_METERS = 150;
 const REROUTE_COOLDOWN_MS = 20000;
 const OFF_ROUTE_CONFIRM_COUNT = 1;
 const MAX_ACCURACY_FOR_REROUTE_METERS = 100;
-
 export default function RouteMapPage() {
   const router = useRouter();
   const [checkingAccess, setCheckingAccess] = useState(true);
@@ -124,7 +118,6 @@ export default function RouteMapPage() {
   const [navError, setNavError] = useState("");
   const [isRerouting, setIsRerouting] = useState(false);
   const [poiTypes, setPoiTypes] = useState({ truckStop: false, weighStation: false, fuel: false });
-
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const platformRef = useRef(null);
@@ -150,8 +143,10 @@ export default function RouteMapPage() {
   const justRecenteredRef = useRef(true);
   const searchBiasRef = useRef(null);
   const [mapsReady, setMapsReady] = useState(false);
-const defaultLayersRef = useRef(null);
-  const [isSatelliteView, setIsSatelliteView] = useState(false);  useEffect(() => {
+  const defaultLayersRef = useRef(null);
+  const satelliteLayerRef = useRef(null);
+  const [isSatelliteView, setIsSatelliteView] = useState(false);
+  useEffect(() => {
     followModeRef.current = followMode;
   }, [followMode]);
   useEffect(() => {
@@ -187,7 +182,6 @@ const defaultLayersRef = useRef(null);
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
     );
   }, [hasAccess]);
-
   async function checkAccess() {
     const {
       data: { user },
@@ -220,7 +214,6 @@ const defaultLayersRef = useRef(null);
     setHasAccess(true);
     setCheckingAccess(false);
   }
-
   useEffect(() => {
     if (!hasAccess) return;
     if (window.H) {
@@ -258,14 +251,26 @@ const defaultLayersRef = useRef(null);
       document.body.appendChild(script);
     });
   }, [hasAccess]);
-
   useEffect(() => {
     if (!mapsReady || !mapRef.current || mapInstance.current) return;
     const H = window.H;
     const apikey = process.env.NEXT_PUBLIC_HERE_MAPS_KEY;
     const platform = new H.service.Platform({ apikey });
     platformRef.current = platform;
-    const defaultLayers = platform.createDefaultLayers();defaultLayersRef.current = defaultLayers;
+    const defaultLayers = platform.createDefaultLayers();
+    defaultLayersRef.current = defaultLayers;
+    const rasterTileService = platform.getRasterTileService({
+      queryParams: {
+        style: "satellite.day",
+        size: "512",
+        ppi: 400,
+      },
+    });
+    const rasterTileProvider = new H.service.rasterTile.Provider(rasterTileService, {
+      engineType: H.Map.EngineType.HARP,
+      tileSize: 512,
+    });
+    satelliteLayerRef.current = new H.map.layer.TileLayer(rasterTileProvider);
     const map = new H.Map(mapRef.current, defaultLayers.vector.normal.map, {
       center: { lat: 39.8283, lng: -98.5795 },
       zoom: 4,
@@ -306,7 +311,6 @@ const defaultLayersRef = useRef(null);
     setCurrentStepIndex(0);
     announceStagesRef.current = {};
   }, [routeResult]);
-
   const fetchSuggestions = useCallback(async (q, kind) => {
     if (q.trim().length < 3) {
       kind === "origin" ? setOriginSuggestions([]) : setDestSuggestions([]);
@@ -327,7 +331,6 @@ const defaultLayersRef = useRef(null);
       // silent fail on suggestions
     }
   }, []);
-
   useEffect(() => {
     const t = setTimeout(() => fetchSuggestions(originQuery, "origin"), 300);
     return () => clearTimeout(t);
@@ -336,7 +339,6 @@ const defaultLayersRef = useRef(null);
     const t = setTimeout(() => fetchSuggestions(destQuery, "dest"), 300);
     return () => clearTimeout(t);
   }, [destQuery, fetchSuggestions]);
-
   function selectSuggestion(kind, s) {
     if (s.lat === null || s.lng === null) return;
     const point = { lat: s.lat, lng: s.lng, address: s.address };
@@ -350,7 +352,6 @@ const defaultLayersRef = useRef(null);
       setShowDestList(false);
     }
   }
-
   const [locatingOrigin, setLocatingOrigin] = useState(false);
   function useCurrentLocationAsOrigin() {
     if (!navigator.geolocation) {
@@ -384,7 +385,6 @@ const defaultLayersRef = useRef(null);
       { enableHighAccuracy: true, timeout: 10000 }
     );
   }
-
   async function handleGetRoute() {
     if (!origin || !destination) {
       setError("Choose both an origin and a destination from the suggestions.");
@@ -415,7 +415,6 @@ const defaultLayersRef = useRef(null);
       setRouting(false);
     }
   }
-
   function drawRoute(polyline, o, d) {
     const H = window.H;
     const map = mapInstance.current;
@@ -448,7 +447,6 @@ const defaultLayersRef = useRef(null);
       map.getViewModel().setLookAtData({ bounds: mapObjectsGroup.current.getBoundingBox() });
     }
   }
-
   function sampleRoutePoints(intervalMeters = 15000) {
     const pts = decodedPointsRef.current;
     const cum = cumulativeDistancesRef.current;
@@ -468,7 +466,6 @@ const defaultLayersRef = useRef(null);
     }
     return samples.slice(0, 25);
   }
-
   async function fetchAndShowPois(types) {
     const H = window.H;
     const map = mapInstance.current;
@@ -508,7 +505,6 @@ const defaultLayersRef = useRef(null);
       // silent fail — POI overlay is a nice-to-have, not core navigation
     }
   }
-
   useEffect(() => {
     if (!routeResult) {
       if (poiMarkersGroup.current) poiMarkersGroup.current.removeAll();
@@ -531,23 +527,19 @@ const defaultLayersRef = useRef(null);
       truckMarkerRef.current.setGeometry({ lat, lng });
     }
   }
-
   function speak(text) {
     if (voiceEnabledRef.current && window.speechSynthesis) {
       const utter = new SpeechSynthesisUtterance(text);
       window.speechSynthesis.speak(utter);
     }
   }
-
   function buildTurnPhrase(step) {
     const text = step.instruction || "continue on the route";
     return expandForSpeech(text);
   }
-
   const FAR_ANNOUNCE_METERS = 804; // ~0.5 mi
   const NEAR_ANNOUNCE_METERS = 91; // ~300 ft
   const ADVANCE_METERS = 40;
-
   function checkForAnnouncement(lat, lng) {
     const idx = currentStepIndexRef.current;
     const pts = actionPointsRef.current;
@@ -576,7 +568,6 @@ const defaultLayersRef = useRef(null);
       setCurrentStepIndex(next);
     }
   }
-
   function pointToSegmentMeters(lat, lng, lat1, lng1, lat2, lng2) {
     const R = 6371000;
     const toRad = (d) => (d * Math.PI) / 180;
@@ -594,7 +585,6 @@ const defaultLayersRef = useRef(null);
     const ddx = px - cx, ddy = py - cy;
     return Math.sqrt(ddx * ddx + ddy * ddy);
   }
-
   function nearestDistanceToRoute(lat, lng) {
     const pts = decodedPointsRef.current;
     if (pts.length < 2) return Infinity;
@@ -606,7 +596,6 @@ const defaultLayersRef = useRef(null);
     }
     return min;
   }
-
   function projectPositionAlongRoute(lat, lng) {
     const pts = decodedPointsRef.current;
     const cum = cumulativeDistancesRef.current;
@@ -637,7 +626,6 @@ const defaultLayersRef = useRef(null);
     }
     return bestAlong;
   }
-
   async function performReroute(lat, lng) {
     if (rerouteLockRef.current) return;
     const dest = destinationRef.current;
@@ -674,7 +662,6 @@ const defaultLayersRef = useRef(null);
       setIsRerouting(false);
     }
   }
-
   function checkOffRoute(lat, lng, accuracy, movedMeters) {
     if (rerouteLockRef.current) return;
     if (Date.now() - lastRerouteRef.current < REROUTE_COOLDOWN_MS) return;
@@ -696,7 +683,6 @@ const defaultLayersRef = useRef(null);
       performReroute(lat, lng);
     }
   }
-
   function handlePositionUpdate(pos) {
     setNavError("");
     const lat = pos.coords.latitude;
@@ -726,11 +712,9 @@ const defaultLayersRef = useRef(null);
     checkForAnnouncement(lat, lng);
     checkOffRoute(lat, lng, pos.coords.accuracy, movedMeters);
   }
-
   function handleGeoError(err) {
     setNavError("Couldn't get your location: " + err.message);
   }
-
   function startNavigation() {
     if (!navigator.geolocation) {
       setNavError("Geolocation isn't available on this device or browser.");
@@ -754,7 +738,6 @@ const defaultLayersRef = useRef(null);
       { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
     );
   }
-
   function endNavigation() {
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
@@ -769,7 +752,6 @@ const defaultLayersRef = useRef(null);
       truckMarkerRef.current = null;
     }
   }
-
   function recenter() {
     setFollowMode(true);
     justRecenteredRef.current = true;
@@ -778,28 +760,28 @@ const defaultLayersRef = useRef(null);
       mapInstance.current.setZoom(17);
     }
   }
-function toggleSatelliteView() {
+  function toggleSatelliteView() {
     const map = mapInstance.current;
     const layers = defaultLayersRef.current;
-    if (!map || !layers) return;
+    const satelliteLayer = satelliteLayerRef.current;
+    if (!map || !layers || !satelliteLayer) return;
     if (isSatelliteView) {
       map.setBaseLayer(layers.vector.normal.map);
     } else {
-      map.setBaseLayer(layers.raster.satellite.map);
+      map.setBaseLayer(satelliteLayer);
     }
     setIsSatelliteView((v) => !v);
-  }  function formatDistance(meters) {
+  }
+  function formatDistance(meters) {
     const miles = meters / 1609.34;
     return `${miles.toFixed(1)} mi`;
   }
-
   function formatDuration(seconds) {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.round((seconds % 3600) / 60);
     if (hours === 0) return `${minutes} min`;
     return `${hours} hr ${minutes} min`;
   }
-
   const hasTruckSpecs =
     truckSpecs &&
     (truckSpecs.truck_height_inches ||
@@ -807,7 +789,6 @@ function toggleSatelliteView() {
       truckSpecs.truck_length_feet ||
       truckSpecs.truck_axle_count);
   const currentStep = actionPoints[currentStepIndex];
-
   if (checkingAccess) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6">
@@ -955,7 +936,7 @@ function toggleSatelliteView() {
             )}
           </div>
         )}
-        {routeResult && !isNavigating && (
+{routeResult && !isNavigating && (
           <div className="bg-slate-900 border border-slate-800 rounded-md mb-4 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 flex-wrap gap-2">
               <div className="flex gap-6">
@@ -1072,12 +1053,14 @@ function toggleSatelliteView() {
           <div
             ref={mapRef}
             className="w-full h-[500px] rounded-md border border-slate-800 bg-slate-900"
-          /><button
+          />
+          <button
             onClick={toggleSatelliteView}
             className="absolute top-3 right-3 z-10 bg-slate-900/90 hover:bg-slate-800 text-white text-xs font-semibold uppercase tracking-wide px-3 py-2 rounded-md shadow-lg border border-slate-700"
           >
             {isSatelliteView ? "Map View" : "Satellite"}
-          </button>          {isNavigating && !followMode && (
+          </button>
+          {isNavigating && !followMode && (
             <button
               onClick={recenter}
               className="absolute bottom-4 right-4 flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold uppercase tracking-wide px-3 py-2 rounded-full shadow-lg"
