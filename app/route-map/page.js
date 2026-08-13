@@ -43,6 +43,45 @@ function bearingDegrees(lat1, lng1, lat2, lng2) {
   return (brng + 360) % 360;
 }
 
+// Street-suffix / directional abbreviations expanded for speech only — the
+// on-screen turn-by-turn text stays exactly as HERE returns it. Order
+// matters: two-letter directionals (NE/NW/SE/SW) must run before the
+// single-letter ones (N/S/E/W) so "NE" doesn't get half-matched by "N" first.
+const SPEECH_ABBREVIATIONS = [
+  [/\bAve\.?\b/gi, "Avenue"],
+  [/\bBlvd\.?\b/gi, "Boulevard"],
+  [/\bCir\.?\b/gi, "Circle"],
+  [/\bCt\.?\b/gi, "Court"],
+  [/\bDr\.?\b/gi, "Drive"],
+  [/\bExpy\.?\b/gi, "Expressway"],
+  [/\bFwy\.?\b/gi, "Freeway"],
+  [/\bHwy\.?\b/gi, "Highway"],
+  [/\bLn\.?\b/gi, "Lane"],
+  [/\bPkwy\.?\b/gi, "Parkway"],
+  [/\bPl\.?\b/gi, "Place"],
+  [/\bRd\.?\b/gi, "Road"],
+  [/\bSq\.?\b/gi, "Square"],
+  [/\bSt\.?\b/gi, "Street"],
+  [/\bTer\.?\b/gi, "Terrace"],
+  [/\bTrl\.?\b/gi, "Trail"],
+  [/\bNE\b/g, "Northeast"],
+  [/\bNW\b/g, "Northwest"],
+  [/\bSE\b/g, "Southeast"],
+  [/\bSW\b/g, "Southwest"],
+  [/\bN\.?\b/g, "North"],
+  [/\bS\.?\b/g, "South"],
+  [/\bE\.?\b/g, "East"],
+  [/\bW\.?\b/g, "West"],
+];
+
+function expandForSpeech(text) {
+  let result = text;
+  for (const [pattern, replacement] of SPEECH_ABBREVIATIONS) {
+    result = result.replace(pattern, replacement);
+  }
+  return result;
+}
+
 const OFF_ROUTE_METERS = 150;
 const REROUTE_COOLDOWN_MS = 20000;
 const OFF_ROUTE_CONFIRM_COUNT = 1;
@@ -429,7 +468,8 @@ export default function RouteMapPage() {
   }
 
   function buildTurnPhrase(step) {
-    return step.instruction || "continue on the route";
+    const text = step.instruction || "continue on the route";
+    return expandForSpeech(text);
   }
 
   const FAR_ANNOUNCE_METERS = 804; // ~0.5 mi
@@ -565,15 +605,10 @@ export default function RouteMapPage() {
   function checkOffRoute(lat, lng, accuracy, movedMeters) {
     if (rerouteLockRef.current) return;
     if (Date.now() - lastRerouteRef.current < REROUTE_COOLDOWN_MS) return;
-    // If we haven't meaningfully moved since the last fix, don't evaluate
-    // off-route at all. This covers being parked anywhere — a lot, a depot,
-    // a rest area — without depending on the browser reporting speed, which
-    // a lot of devices don't do reliably.
     if (movedMeters === null || movedMeters === undefined || movedMeters < 3) {
       offRouteStreakRef.current = 0;
       return;
     }
-    // A single fuzzy fix shouldn't be trusted either.
     if (typeof accuracy === "number" && accuracy > MAX_ACCURACY_FOR_REROUTE_METERS) {
       return;
     }
@@ -596,9 +631,6 @@ export default function RouteMapPage() {
     let heading = pos.coords.heading;
     const prev = lastPositionRef.current;
     const movedMeters = prev ? haversineMeters(prev.lat, prev.lng, lat, lng) : null;
-    // Many browsers (iOS Safari especially) never populate coords.heading.
-    // Fall back to computing our own bearing from the last GPS fix, but only
-    // once we've moved far enough that GPS noise won't dominate the result.
     if ((typeof heading !== "number" || isNaN(heading)) && movedMeters !== null && movedMeters > 8) {
       heading = bearingDegrees(prev.lat, prev.lng, lat, lng);
     }
@@ -608,9 +640,6 @@ export default function RouteMapPage() {
     if (followModeRef.current && mapInstance.current) {
       const viewModel = mapInstance.current.getViewModel();
       const lookAt = { position: { lat, lng } };
-      // Only force zoom right after starting nav or tapping re-center —
-      // otherwise this runs every GPS tick and overrides any pinch/button
-      // zoom you just did.
       if (justRecenteredRef.current) {
         lookAt.zoom = 17;
         justRecenteredRef.current = false;
