@@ -267,7 +267,7 @@ export default function RouteMapPage() {
       },
     });
     const rasterTileProvider = new H.service.rasterTile.Provider(rasterTileService, {
-      engineType: H.Map.EngineType.HARP,
+      
       tileSize: 512,
     });
     satelliteLayerRef.current = new H.map.layer.TileLayer(rasterTileProvider);
