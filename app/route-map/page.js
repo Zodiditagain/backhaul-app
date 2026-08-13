@@ -14,7 +14,6 @@ import {
   RefreshCw,
   ArrowLeft,
   Crosshair,
-  Layers,
 } from "lucide-react";
 import Link from "next/link";
 import { decode as decodeFlexPolyline } from "@here/flexpolyline";
@@ -112,12 +111,10 @@ export default function RouteMapPage() {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [navError, setNavError] = useState("");
   const [isRerouting, setIsRerouting] = useState(false);
-  const [satelliteView, setSatelliteView] = useState(false);
 
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const platformRef = useRef(null);
-  const defaultLayersRef = useRef(null);
   const mapObjectsGroup = useRef(null);
   const truckMarkerRef = useRef(null);
   const decodedPointsRef = useRef([]);
@@ -254,7 +251,6 @@ export default function RouteMapPage() {
     const platform = new H.service.Platform({ apikey });
     platformRef.current = platform;
     const defaultLayers = platform.createDefaultLayers();
-    defaultLayersRef.current = defaultLayers;
     const map = new H.Map(mapRef.current, defaultLayers.vector.normal.map, {
       center: { lat: 39.8283, lng: -98.5795 },
       zoom: 4,
@@ -434,15 +430,6 @@ export default function RouteMapPage() {
     if (!isNavigatingRef.current) {
       map.getViewModel().setLookAtData({ bounds: mapObjectsGroup.current.getBoundingBox() });
     }
-  }
-
-  function toggleSatellite() {
-    const layers = defaultLayersRef.current;
-    const map = mapInstance.current;
-    if (!layers || !map) return;
-    const next = !satelliteView;
-    map.setBaseLayer(next ? layers.raster.satellite.map : layers.vector.normal.map);
-    setSatelliteView(next);
   }
 
   function updateTruckMarker(lat, lng) {
@@ -957,13 +944,6 @@ export default function RouteMapPage() {
             ref={mapRef}
             className="w-full h-[500px] rounded-md border border-slate-800 bg-slate-900"
           />
-          <button
-            onClick={toggleSatellite}
-            className="absolute top-4 right-4 flex items-center gap-1.5 bg-slate-900/90 hover:bg-slate-800 text-white text-xs font-semibold uppercase tracking-wide px-3 py-2 rounded-full shadow-lg border border-slate-700"
-          >
-            <Layers size={14} />
-            {satelliteView ? "Map View" : "Satellite"}
-          </button>
           {isNavigating && !followMode && (
             <button
               onClick={recenter}
