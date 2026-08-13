@@ -43,9 +43,7 @@ function bearingDegrees(lat1, lng1, lat2, lng2) {
 }
 
 // Street-suffix / directional abbreviations expanded for speech only — the
-// on-screen turn-by-turn text stays exactly as HERE returns it. Order
-// matters: two-letter directionals (NE/NW/SE/SW) must run before the
-// single-letter ones (N/S/E/W) so "NE" doesn't get half-matched by "N" first.
+// on-screen turn-by-turn text stays exactly as HERE returns it.
 const SPEECH_ABBREVIATIONS = [
   [/\bAve\.?\b/gi, "Avenue"],
   [/\bBlvd\.?\b/gi, "Boulevard"],
@@ -81,6 +79,18 @@ function expandForSpeech(text) {
   return result;
 }
 
+function poiIconSvg(type) {
+  const colors = {
+    truckStop: "#f97316",
+    weighStation: "#ef4444",
+    fuel: "#22c55e",
+    restArea: "#a855f7",
+    other: "#94a3b8",
+  };
+  const color = colors[type] || colors.other;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"><circle cx="11" cy="11" r="8" fill="${color}" stroke="white" stroke-width="2.5"/></svg>`;
+}
+
 const OFF_ROUTE_METERS = 150;
 const REROUTE_COOLDOWN_MS = 20000;
 const OFF_ROUTE_CONFIRM_COUNT = 1;
@@ -111,11 +121,14 @@ export default function RouteMapPage() {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [navError, setNavError] = useState("");
   const [isRerouting, setIsRerouting] = useState(false);
+  const [poiTypes, setPoiTypes] = useState({ truckStop: false, weighStation: false, fuel: false });
 
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const platformRef = useRef(null);
+  const uiRef = useRef(null);
   const mapObjectsGroup = useRef(null);
+  const poiMarkersGroup = useRef(null);
   const truckMarkerRef = useRef(null);
   const decodedPointsRef = useRef([]);
   const cumulativeDistancesRef = useRef([]);
@@ -257,12 +270,14 @@ export default function RouteMapPage() {
       pixelRatio: window.devicePixelRatio || 1,
     });
     new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
-    H.ui.UI.createDefault(map, defaultLayers);
+    uiRef.current = H.ui.UI.createDefault(map, defaultLayers);
     map.addEventListener("dragstart", () => {
       setFollowMode(false);
     });
     mapObjectsGroup.current = new H.map.Group();
     map.addObject(mapObjectsGroup.current);
+    poiMarkersGroup.current = new H.map.Group();
+    map.addObject(poiMarkersGroup.current);
     mapInstance.current = map;
     const resizeHandler = () => map.getViewPort().resize();
     window.addEventListener("resize", resizeHandler);
@@ -432,6 +447,74 @@ export default function RouteMapPage() {
     }
   }
 
+  function sampleRoutePoints(intervalMeters = 15000) {
+    const pts = decodedPointsRef.current;
+    const cum = cumulativeDistancesRef.current;
+    if (pts.length < 2) return [];
+    const samples = [];
+    let nextTarget = 0;
+    for (let i = 0; i < pts.length; i++) {
+      if (cum[i] >= nextTarget) {
+        samples.push({ lat: pts[i][0], lng: pts[i][1] });
+        nextTarget += intervalMeters;
+      }
+    }
+    const last = pts[pts.length - 1];
+    const lastSample = samples[samples.length - 1];
+    if (!lastSample || lastSample.lat !== last[0] || lastSample.lng !== last[1]) {
+      samples.push({ lat: last[0], lng: last[1] });
+    }
+    return samples.slice(0, 25);
+  }
+
+  async function fetchAndShowPois(types) {
+    const H = window.H;
+    const map = mapInstance.current;
+    if (!H || !map || !poiMarkersGroup.current) return;
+    poiMarkersGroup.current.removeAll();
+    const enabled = Object.keys(types).filter((k) => types[k]);
+    if (enabled.length === 0 || decodedPointsRef.current.length < 2) return;
+    const points = sampleRoutePoints();
+    if (points.length === 0) return;
+    try {
+      const res = await fetch("/api/here/pois", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ points, types: enabled }),
+      });
+      const data = await res.json();
+      const items = data.items || [];
+      items.forEach((poi) => {
+        const icon = new H.map.Icon(poiIconSvg(poi.type), {
+          size: { w: 22, h: 22 },
+          anchor: { x: 11, y: 11 },
+        });
+        const marker = new H.map.Marker({ lat: poi.lat, lng: poi.lng }, { icon });
+        marker.setData(poi);
+        marker.addEventListener("tap", (evt) => {
+          const p = evt.target.getData();
+          if (!uiRef.current) return;
+          const bubble = new H.ui.InfoBubble(
+            { lat: p.lat, lng: p.lng },
+            { content: `<strong>${p.title}</strong><br/>${p.address}` }
+          );
+          uiRef.current.addBubble(bubble);
+        });
+        poiMarkersGroup.current.addObject(marker);
+      });
+    } catch {
+      // silent fail — POI overlay is a nice-to-have, not core navigation
+    }
+  }
+
+  useEffect(() => {
+    if (!routeResult) {
+      if (poiMarkersGroup.current) poiMarkersGroup.current.removeAll();
+      return;
+    }
+    fetchAndShowPois(poiTypes);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [poiTypes, routeResult]);
   function updateTruckMarker(lat, lng) {
     const H = window.H;
     const map = mapInstance.current;
@@ -589,6 +672,7 @@ export default function RouteMapPage() {
       setIsRerouting(false);
     }
   }
+
   function checkOffRoute(lat, lng, accuracy, movedMeters) {
     if (rerouteLockRef.current) return;
     if (Date.now() - lastRerouteRef.current < REROUTE_COOLDOWN_MS) return;
@@ -720,7 +804,6 @@ export default function RouteMapPage() {
       </div>
     );
   }
-
   return (
     <div className="min-h-screen bg-slate-950 px-6 py-10">
       <div className="max-w-5xl mx-auto">
@@ -936,6 +1019,41 @@ export default function RouteMapPage() {
             >
               <XCircle size={14} />
               End Navigation
+            </button>
+          </div>
+        )}
+        {routeResult && (
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            <span className="text-xs text-gray-500 uppercase tracking-wide mr-1">Show on map:</span>
+            <button
+              onClick={() => setPoiTypes((p) => ({ ...p, truckStop: !p.truckStop }))}
+              className={`text-xs font-semibold uppercase tracking-wide px-3 py-1.5 rounded-md border ${
+                poiTypes.truckStop
+                  ? "bg-orange-600 border-orange-600 text-white"
+                  : "bg-slate-900 border-slate-800 text-gray-400 hover:text-white"
+              }`}
+            >
+              Truck Stops
+            </button>
+            <button
+              onClick={() => setPoiTypes((p) => ({ ...p, weighStation: !p.weighStation }))}
+              className={`text-xs font-semibold uppercase tracking-wide px-3 py-1.5 rounded-md border ${
+                poiTypes.weighStation
+                  ? "bg-red-600 border-red-600 text-white"
+                  : "bg-slate-900 border-slate-800 text-gray-400 hover:text-white"
+              }`}
+            >
+              Weigh Stations
+            </button>
+            <button
+              onClick={() => setPoiTypes((p) => ({ ...p, fuel: !p.fuel }))}
+              className={`text-xs font-semibold uppercase tracking-wide px-3 py-1.5 rounded-md border ${
+                poiTypes.fuel
+                  ? "bg-green-600 border-green-600 text-white"
+                  : "bg-slate-900 border-slate-800 text-gray-400 hover:text-white"
+              }`}
+            >
+              Fuel
             </button>
           </div>
         )}
