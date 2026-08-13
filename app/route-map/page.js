@@ -150,8 +150,8 @@ export default function RouteMapPage() {
   const justRecenteredRef = useRef(true);
   const searchBiasRef = useRef(null);
   const [mapsReady, setMapsReady] = useState(false);
-
-  useEffect(() => {
+const defaultLayersRef = useRef(null);
+  const [isSatelliteView, setIsSatelliteView] = useState(false);  useEffect(() => {
     followModeRef.current = followMode;
   }, [followMode]);
   useEffect(() => {
@@ -265,7 +265,7 @@ export default function RouteMapPage() {
     const apikey = process.env.NEXT_PUBLIC_HERE_MAPS_KEY;
     const platform = new H.service.Platform({ apikey });
     platformRef.current = platform;
-    const defaultLayers = platform.createDefaultLayers();
+    const defaultLayers = platform.createDefaultLayers();defaultLayersRef.current = defaultLayers;
     const map = new H.Map(mapRef.current, defaultLayers.vector.normal.map, {
       center: { lat: 39.8283, lng: -98.5795 },
       zoom: 4,
@@ -778,8 +778,17 @@ export default function RouteMapPage() {
       mapInstance.current.setZoom(17);
     }
   }
-
-  function formatDistance(meters) {
+function toggleSatelliteView() {
+    const map = mapInstance.current;
+    const layers = defaultLayersRef.current;
+    if (!map || !layers) return;
+    if (isSatelliteView) {
+      map.setBaseLayer(layers.vector.normal.map);
+    } else {
+      map.setBaseLayer(layers.raster.satellite.map);
+    }
+    setIsSatelliteView((v) => !v);
+  }  function formatDistance(meters) {
     const miles = meters / 1609.34;
     return `${miles.toFixed(1)} mi`;
   }
@@ -1063,8 +1072,12 @@ export default function RouteMapPage() {
           <div
             ref={mapRef}
             className="w-full h-[500px] rounded-md border border-slate-800 bg-slate-900"
-          />
-          {isNavigating && !followMode && (
+          /><button
+            onClick={toggleSatelliteView}
+            className="absolute top-3 right-3 z-10 bg-slate-900/90 hover:bg-slate-800 text-white text-xs font-semibold uppercase tracking-wide px-3 py-2 rounded-md shadow-lg border border-slate-700"
+          >
+            {isSatelliteView ? "Map View" : "Satellite"}
+          </button>          {isNavigating && !followMode && (
             <button
               onClick={recenter}
               className="absolute bottom-4 right-4 flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold uppercase tracking-wide px-3 py-2 rounded-full shadow-lg"
