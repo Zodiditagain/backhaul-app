@@ -83,7 +83,8 @@ function poiIconSvg(type) {
     other: { color: "#94a3b8", emoji: "📍" },
   };
   const { color, emoji } = config[type] || config.other;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="34" viewBox="0 0 30 34">
+    <ellipse cx="15" cy="30" rx="8" ry="3" fill="black" opacity="0.25"/>
     <circle cx="15" cy="15" r="13" fill="${color}" stroke="white" stroke-width="2.5"/>
     <text x="15" y="20" font-size="14" text-anchor="middle">${emoji}</text>
   </svg>`;
@@ -146,6 +147,7 @@ export default function RouteMapPage() {
   const [mapsReady, setMapsReady] = useState(false);
   const defaultLayersRef = useRef(null);
   const satelliteLayerRef = useRef(null);
+  const exploreLayerRef = useRef(null);
   const [isSatelliteView, setIsSatelliteView] = useState(false);
   useEffect(() => {
     followModeRef.current = followMode;
@@ -260,24 +262,45 @@ export default function RouteMapPage() {
     platformRef.current = platform;
     const defaultLayers = platform.createDefaultLayers();
     defaultLayersRef.current = defaultLayers;
-    const rasterTileService = platform.getRasterTileService({
+    const satelliteTileService = platform.getRasterTileService({
       queryParams: {
         style: "satellite.day",
         size: "512",
         ppi: 400,
       },
     });
-    const rasterTileProvider = new H.service.rasterTile.Provider(rasterTileService, {
+    const satelliteTileProvider = new H.service.rasterTile.Provider(satelliteTileService, {
       tileSize: 512,
     });
-    satelliteLayerRef.current = new H.map.layer.TileLayer(rasterTileProvider);
-    const map = new H.Map(mapRef.current, defaultLayers.vector.normal.map, {
+    satelliteLayerRef.current = new H.map.layer.TileLayer(satelliteTileProvider);
+    const exploreTileService = platform.getRasterTileService({
+      queryParams: {
+        style: "explore.day",
+        size: "512",
+        ppi: 400,
+      },
+    });
+    const exploreTileProvider = new H.service.rasterTile.Provider(exploreTileService, {
+      tileSize: 512,
+    });
+    exploreLayerRef.current = new H.map.layer.TileLayer(exploreTileProvider);
+    const map = new H.Map(mapRef.current, exploreLayerRef.current, {
       center: { lat: 39.8283, lng: -98.5795 },
       zoom: 4,
       pixelRatio: window.devicePixelRatio || 1,
     });
     new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
     uiRef.current = H.ui.UI.createDefault(map, defaultLayers);
+    try {
+      uiRef.current.removeControl("mapsettings");
+    } catch {
+      // control id not found on this SDK version — leave native control in place
+    }
+    try {
+      uiRef.current.removeControl("zoom");
+    } catch {
+      // control id not found on this SDK version — leave native control in place
+    }
     map.addEventListener("dragstart", () => {
       setFollowMode(false);
     });
@@ -438,10 +461,13 @@ export default function RouteMapPage() {
     decoded.polyline.forEach(([lat, lng]) => {
       lineString.pushPoint({ lat, lng });
     });
-    const routeLine = new H.map.Polyline(lineString, {
-      style: { lineWidth: 5, strokeColor: "#f59e0b" },
+    const routeOutline = new H.map.Polyline(lineString, {
+      style: { lineWidth: 9, strokeColor: "rgba(255,255,255,0.85)", lineCap: "round", lineJoin: "round" },
     });
-    const objectsToAdd = [routeLine];
+    const routeLine = new H.map.Polyline(lineString, {
+      style: { lineWidth: 5, strokeColor: "#f59e0b", lineCap: "round", lineJoin: "round" },
+    });
+    const objectsToAdd = [routeOutline, routeLine];
     if (!isNavigatingRef.current) {
       const originMarker = new H.map.Marker({ lat: o.lat, lng: o.lng });
       originMarkerRef.current = originMarker;
@@ -492,7 +518,7 @@ export default function RouteMapPage() {
       const items = data.items || [];
       items.forEach((poi) => {
     const icon = new H.map.Icon(poiIconSvg(poi.type), {
-      size: { w: 30, h: 30 },
+      size: { w: 30, h: 34 },
       anchor: { x: 15, y: 15 },
     });        
         const marker = new H.map.Marker({ lat: poi.lat, lng: poi.lng }, { icon });
@@ -526,6 +552,7 @@ export default function RouteMapPage() {
     if (!H || !map) return;
     if (!truckMarkerRef.current) {
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
+        <ellipse cx="17" cy="19" rx="12" ry="10" fill="black" opacity="0.18"/>
         <circle cx="17" cy="17" r="14" fill="#3b82f6" opacity="0.25"/>
         <path d="M17 5 L26 27 L17 21 L8 27 Z" fill="#3b82f6" stroke="white" stroke-width="2.5" stroke-linejoin="round"/>
       </svg>`;
@@ -775,15 +802,23 @@ export default function RouteMapPage() {
   }
   function toggleSatelliteView() {
     const map = mapInstance.current;
-    const layers = defaultLayersRef.current;
+    const exploreLayer = exploreLayerRef.current;
     const satelliteLayer = satelliteLayerRef.current;
-    if (!map || !layers || !satelliteLayer) return;
+    if (!map || !exploreLayer || !satelliteLayer) return;
     if (isSatelliteView) {
-      map.setBaseLayer(layers.vector.normal.map);
+      map.setBaseLayer(exploreLayer);
     } else {
       map.setBaseLayer(satelliteLayer);
     }
     setIsSatelliteView((v) => !v);
+  }
+  function zoomIn() {
+    const map = mapInstance.current;
+    if (map) map.setZoom(map.getZoom() + 1);
+  }
+  function zoomOut() {
+    const map = mapInstance.current;
+    if (map) map.setZoom(map.getZoom() - 1);
   }
   function formatDistance(meters) {
     const miles = meters / 1609.34;
@@ -1073,6 +1108,20 @@ export default function RouteMapPage() {
           >
             {isSatelliteView ? "Map View" : "Satellite"}
           </button>
+          <div className="absolute bottom-4 left-4 z-10 flex flex-col gap-1">
+            <button
+              onClick={zoomIn}
+              className="w-9 h-9 flex items-center justify-center bg-slate-900/90 hover:bg-slate-800 text-white text-lg font-semibold rounded-md shadow-lg border border-slate-700"
+            >
+              +
+            </button>
+            <button
+              onClick={zoomOut}
+              className="w-9 h-9 flex items-center justify-center bg-slate-900/90 hover:bg-slate-800 text-white text-lg font-semibold rounded-md shadow-lg border border-slate-700"
+            >
+              −
+            </button>
+          </div>
           {isNavigating && !followMode && (
             <button
               onClick={recenter}
