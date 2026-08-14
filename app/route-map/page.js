@@ -977,12 +977,12 @@ export default function RouteMapPage() {
             <p className="text-lg font-semibold text-white leading-snug">
               {currentStep.instruction}
             </p>
-            {currentPosition && (
+          {currentPosition && (
               <p className="text-xs text-blue-200 mt-2 font-mono">
                 DEBUG — step {currentStepIndex + 1}/{actionPoints.length} · along-route dist: {Math.round(currentStep.distAlongRoute - projectPositionAlongRoute(currentPosition.lat, currentPosition.lng))}m
               </p>
             )}
-          </div>
+         </div>
         )}
 {routeResult && !isNavigating && (
           <div className="bg-slate-900 border border-slate-800 rounded-md mb-4 overflow-hidden">
