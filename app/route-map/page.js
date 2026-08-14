@@ -14,6 +14,8 @@ import {
   RefreshCw,
   ArrowLeft,
   Crosshair,
+  RotateCcw,
+  RotateCw,
 } from "lucide-react";
 import Link from "next/link";
 import { decode as decodeFlexPolyline } from "@here/flexpolyline";
@@ -149,6 +151,7 @@ export default function RouteMapPage() {
   const satelliteLayerRef = useRef(null);
   const exploreLayerRef = useRef(null);
   const [isSatelliteView, setIsSatelliteView] = useState(false);
+  const [mapHeading, setMapHeadingDisplay] = useState(0);
   useEffect(() => {
     followModeRef.current = followMode;
   }, [followMode]);
@@ -742,6 +745,7 @@ export default function RouteMapPage() {
       if (typeof heading === "number" && !isNaN(heading)) {
         lookAt.heading = heading;
         lookAt.tilt = 55;
+        setMapHeadingDisplay(heading);
       }
       viewModel.setLookAtData(lookAt);
     }
@@ -820,6 +824,22 @@ export default function RouteMapPage() {
     const map = mapInstance.current;
     if (map) map.setZoom(map.getZoom() - 1);
   }
+  function rotateMap(deltaDegrees) {
+    const map = mapInstance.current;
+    if (!map) return;
+    const viewModel = map.getViewModel();
+    const current = viewModel.getLookAtData().heading || 0;
+    const next = (current + deltaDegrees + 360) % 360;
+    viewModel.setLookAtData({ heading: next });
+    setMapHeadingDisplay(next);
+    setFollowMode(false);
+  }
+  function resetMapHeading() {
+    const map = mapInstance.current;
+    if (!map) return;
+    map.getViewModel().setLookAtData({ heading: 0 });
+    setMapHeadingDisplay(0);
+  }
   function formatDistance(meters) {
     const miles = meters / 1609.34;
     return `${miles.toFixed(1)} mi`;
@@ -866,7 +886,7 @@ export default function RouteMapPage() {
           <p className="text-xs text-gray-500 mb-6">
             No truck dimensions on file yet — routes will use standard truck defaults. Add your
             height, weight, length, and axle count in your profile for restricted routing.
-          </p>
+              </p>
         )}
         {!isNavigating && (
           <div className="grid md:grid-cols-2 gap-4 mb-4">
@@ -977,12 +997,12 @@ export default function RouteMapPage() {
             <p className="text-lg font-semibold text-white leading-snug">
               {currentStep.instruction}
             </p>
-          {currentPosition && (
+            {currentPosition && (
               <p className="text-xs text-blue-200 mt-2 font-mono">
                 DEBUG — step {currentStepIndex + 1}/{actionPoints.length} · along-route dist: {Math.round(currentStep.distAlongRoute - projectPositionAlongRoute(currentPosition.lat, currentPosition.lng))}m
               </p>
             )}
-         </div>
+          </div>
         )}
 {routeResult && !isNavigating && (
           <div className="bg-slate-900 border border-slate-800 rounded-md mb-4 overflow-hidden">
@@ -1102,12 +1122,37 @@ export default function RouteMapPage() {
             ref={mapRef}
             className="w-full h-[500px] rounded-md border border-slate-800 bg-slate-900"
           />
-          <button
-            onClick={toggleSatelliteView}
-            className="absolute top-3 right-3 z-10 bg-slate-900/90 hover:bg-slate-800 text-white text-xs font-semibold uppercase tracking-wide px-3 py-2 rounded-md shadow-lg border border-slate-700"
-          >
-            {isSatelliteView ? "Map View" : "Satellite"}
-          </button>
+          <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
+            <button
+              onClick={toggleSatelliteView}
+              className="bg-slate-900/90 hover:bg-slate-800 text-white text-xs font-semibold uppercase tracking-wide px-3 py-2 rounded-md shadow-lg border border-slate-700"
+            >
+              {isSatelliteView ? "Map View" : "Satellite"}
+            </button>
+            <div className="flex items-center gap-0.5 bg-slate-900/90 border border-slate-700 rounded-md shadow-lg p-1">
+              <button
+                onClick={() => rotateMap(-30)}
+                title="Rotate left"
+                className="w-8 h-8 flex items-center justify-center text-white hover:bg-slate-800 rounded"
+              >
+                <RotateCcw size={15} />
+              </button>
+              <button
+                onClick={resetMapHeading}
+                title="Reset to north"
+                className="w-8 h-8 flex items-center justify-center text-white hover:bg-slate-800 rounded"
+              >
+                <Navigation size={15} style={{ transform: `rotate(${-mapHeading}deg)` }} />
+              </button>
+              <button
+                onClick={() => rotateMap(30)}
+                title="Rotate right"
+                className="w-8 h-8 flex items-center justify-center text-white hover:bg-slate-800 rounded"
+              >
+                <RotateCw size={15} />
+              </button>
+            </div>
+          </div>
           <div className="absolute bottom-4 left-4 z-10 flex flex-col gap-1">
             <button
               onClick={zoomIn}
