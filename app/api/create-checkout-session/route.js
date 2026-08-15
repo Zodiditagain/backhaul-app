@@ -80,8 +80,15 @@ export async function POST(req) {
       customer: customerId,
       mode: "subscription",
       line_items: [{ price: priceId, quantity: 1 }],
+      // No card required to start the trial. If the customer never adds a
+      // payment method, the subscription is auto-canceled when the trial
+      // ends instead of trying (and failing) to charge nothing on file.
+      payment_method_collection: "if_required",
       subscription_data: {
         trial_period_days: 7,
+        trial_settings: {
+          end_behavior: { missing_payment_method: "cancel" },
+        },
         metadata: { supabase_user_id: userId, product },
       },
       success_url: `${origin}${productConfig.successPath}?checkout=success`,
