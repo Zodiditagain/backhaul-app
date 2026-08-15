@@ -23,10 +23,20 @@ const EQUIPMENT_OPTIONS = [
   { id: "other", label: "Other" },
 ];
 
+const AVAILABILITY_WINDOW_HOURS = 6;
+
+function isAvailabilityActive(availableNow, availableSince) {
+  if (!availableNow || !availableSince) return false;
+  const hoursAgo = (Date.now() - new Date(availableSince).getTime()) / 36e5;
+  return hoursAgo < AVAILABILITY_WINDOW_HOURS;
+}
+
 export default function TruckerDashboard({ user }) {
   const searchParams = useSearchParams();
   const [profile, setProfile] = useState(null);
   const [details, setDetails] = useState(null);
+  const [markingAvailable, setMarkingAvailable] = useState(false);
+  const [availError, setAvailError] = useState("");
   const [form, setForm] = useState({
     lanes: "",
     bio: "",
@@ -57,7 +67,7 @@ export default function TruckerDashboard({ user }) {
   async function loadEverything() {
     const { data: profileData } = await supabase
       .from("profiles")
-      .select("equipment_types, fleet_size, operator_type, company_name, dot_number, mc_number, insurance_cargo, insurance_liability, truck_height_inches, truck_weight_lbs, truck_length_feet, truck_axle_count, truck_hazmat")
+      .select("equipment_types, fleet_size, operator_type, company_name, dot_number, mc_number, insurance_cargo, insurance_liability, truck_height_inches, truck_weight_lbs, truck_length_feet, truck_axle_count, truck_hazmat, available_now, available_since, available_location_label")
       .eq("id", user.id)
       .single();
     setProfile(profileData);
@@ -133,6 +143,63 @@ export default function TruckerDashboard({ user }) {
     loadEverything();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function markAvailable() {
+    setAvailError("");
+    if (!navigator.geolocation) {
+      setAvailError("Geolocation isn't available in this browser.");
+      return;
+    }
+    setMarkingAvailable(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        let label = `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+        try {
+          const res = await fetch(`/api/here/reverse?lat=${lat}&lng=${lng}`);
+          const data = await res.json();
+          if (data.address) label = data.address;
+        } catch {
+          // fall back to raw coordinates if reverse geocoding fails
+        }
+        const nowIso = new Date().toISOString();
+        const { error } = await supabase
+          .from("profiles")
+          .update({
+            available_now: true,
+            available_since: nowIso,
+            available_lat: lat,
+            available_lng: lng,
+            available_location_label: label,
+          })
+          .eq("id", user.id);
+        setMarkingAvailable(false);
+        if (!error) {
+          setProfile((p) => ({
+            ...p,
+            available_now: true,
+            available_since: nowIso,
+            available_location_label: label,
+          }));
+        } else {
+          setAvailError("Couldn't update your availability. Try again.");
+        }
+      },
+      (err) => {
+        setAvailError("Couldn't get your location: " + err.message);
+        setMarkingAvailable(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
+  }
+
+  async function markUnavailable() {
+    setMarkingAvailable(true);
+    const { error } = await supabase.from("profiles").update({ available_now: false }).eq("id", user.id);
+    setMarkingAvailable(false);
+    if (!error) setProfile((p) => ({ ...p, available_now: false }));
+  }
 
   async function openConversation(m) {
     setActiveMatch(m);
@@ -242,6 +309,50 @@ export default function TruckerDashboard({ user }) {
           }}
         />
       </div>
+
+      {(() => {
+        const availabilityActive = isAvailabilityActive(profile?.available_now, profile?.available_since);
+        return (
+          <div className={`rounded-sm p-5 border-2 ${availabilityActive ? "bg-green-600/10 border-green-600" : "bg-white border-gray-300"}`}>
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className={`w-11 h-11 rotate-45 flex items-center justify-center shrink-0 ${availabilityActive ? "bg-green-600" : "bg-asphalt/10"}`}>
+                  <Truck className={`-rotate-45 ${availabilityActive ? "text-white" : "text-steelgray"}`} size={20} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-base text-asphalt">
+                      {availabilityActive ? "You're marked Available" : "Available for a backhaul?"}
+                    </span>
+                    {availabilityActive && (
+                      <span className="text-[10px] uppercase font-mono tracking-wide bg-green-600 text-white px-1.5 py-0.5 rounded-sm">
+                        Live
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-steelgray mt-0.5">
+                    {availabilityActive
+                      ? `Near ${profile?.available_location_label || "your location"} · brokers and vendors can see you now (expires after ${AVAILABILITY_WINDOW_HOURS}h)`
+                      : "Just dropped a load? Let brokers and vendors see you're open for a backhaul nearby."}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={availabilityActive ? markUnavailable : markAvailable}
+                disabled={markingAvailable}
+                className={`shrink-0 py-2.5 px-4 rounded-sm font-mono text-xs uppercase tracking-wide transition-colors disabled:opacity-50 ${
+                  availabilityActive
+                    ? "bg-white border-2 border-green-600 text-green-700 hover:bg-green-50"
+                    : "bg-green-600 hover:bg-green-800 text-white"
+                }`}
+              >
+                {markingAvailable ? "Updating..." : availabilityActive ? "Mark Booked" : "I'm Available"}
+              </button>
+            </div>
+            {availError && <p className="text-xs text-alertred mt-3">{availError}</p>}
+          </div>
+        );
+      })()}
 
       <Link
         href="/route-map"
