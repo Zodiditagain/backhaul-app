@@ -92,6 +92,14 @@ export default function Dashboard() {
             )}
             {isPartner && (
               <Link
+                href="/available-trucks"
+                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
+              >
+                <Truck size={14} /> Available Trucks
+              </Link>
+            )}
+            {isPartner && (
+              <Link
                 href="/onboarding-partner"
                 className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
               >
