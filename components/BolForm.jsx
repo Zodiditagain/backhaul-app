@@ -70,6 +70,7 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
     carrier_mc: "",
     equipment_type: "Dry Van",
     freight_charges: "Prepaid",
+    rate_per_mile: "",
     declared_value: "",
     cod_amount: "",
     temperature_requirement: "",
@@ -169,6 +170,7 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
       ...form,
       pickup_date: form.pickup_date || null,
       delivery_date: form.delivery_date || null,
+      rate_per_mile: form.rate_per_mile ? Number(form.rate_per_mile) : null,
       match_id: match.id,
       broker_id: user.id,
       trucker_id: match.trucker_id,
@@ -445,11 +447,15 @@ export default function BolForm({ match, user, existingBol, onClose, onSaved }) 
               ))}
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
+              <Field label="Agreed Rate ($/mi)" type="number" value={form.rate_per_mile} onChange={(v) => set("rate_per_mile", v)} />
               <Field label="Declared Value" value={form.declared_value} onChange={(v) => set("declared_value", v)} />
               <Field label="COD Amount" value={form.cod_amount} onChange={(v) => set("cod_amount", v)} />
               <Field label="Temperature Requirement" value={form.temperature_requirement} onChange={(v) => set("temperature_requirement", v)} />
               <Field label="Seal Number" value={form.seal_number} onChange={(v) => set("seal_number", v)} />
             </div>
+            <p className="text-xs text-gray-400 italic mt-2">
+              The agreed rate helps power BackHaul Market Pulse's real (non-estimated) rate data once this load is completed. It's never shown to anyone outside this shipment — only anonymized, aggregated averages are used.
+            </p>
             <TextArea label="Special Instructions" value={form.special_instructions} onChange={(v) => set("special_instructions", v)} />
           </section>
         </div>
