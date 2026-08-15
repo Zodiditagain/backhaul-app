@@ -132,8 +132,8 @@ export default function MarketPulsePage() {
     const exploreTileProvider = new H.service.rasterTile.Provider(exploreTileService, { tileSize: 512 });
     const exploreLayer = new H.map.layer.TileLayer(exploreTileProvider);
     const map = new H.Map(mapRef.current, exploreLayer, {
-      center: { lat: 32.6, lng: -85.3 },
-      zoom: 6,
+      center: { lat: 39.5, lng: -98.35 },
+      zoom: 4,
       pixelRatio: window.devicePixelRatio || 1,
     });
     new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
@@ -185,7 +185,7 @@ export default function MarketPulsePage() {
       return;
     }
     try {
-      const params = new URLSearchParams({ q, lat: "32.6", lng: "-85.3" });
+      const params = new URLSearchParams({ q, lat: "39.5", lng: "-98.35" });
       const res = await fetch(`/api/here/autocomplete?${params.toString()}`);
       const data = await res.json();
       const items = (data.items || []).filter((i) => i.lat !== null && i.lng !== null);
@@ -207,7 +207,7 @@ export default function MarketPulsePage() {
   function selectPlace(kind, place) {
     const nearest = nearestMarket(place.lat, place.lng);
     if (!nearest) {
-      setLaneError("That location isn't near a Southeast market we cover yet.");
+      setLaneError("That location isn't near a market we cover yet.");
       return;
     }
     setLaneError("");
@@ -262,13 +262,18 @@ export default function MarketPulsePage() {
           <Activity size={22} className="text-amber-400" />
           <h1 className="text-2xl font-bold text-white">BackHaul Market Pulse</h1>
           <span className="text-[10px] uppercase tracking-wide font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded-full px-2 py-0.5">
-            Southeast MVP
+            Nationwide
+          </span>
+          <span className="text-[10px] uppercase tracking-wide font-semibold bg-slate-800 text-gray-300 border border-slate-700 rounded-full px-2 py-0.5">
+            Preview
           </span>
         </div>
         <p className="text-xs text-gray-500 mb-6 max-w-2xl">
-          Near-real-time market estimates blended with BackHaul's own anonymized, verified
-          activity — never a specific broker, carrier, customer, shipment, or rate confirmation.
-          These are estimates to help you negotiate, not a guaranteed booked rate.
+          Preview feature — near-real-time market estimates blended with BackHaul's own
+          anonymized, verified activity — never a specific broker, carrier, customer, shipment,
+          or rate confirmation. These are estimates to help you negotiate, not guaranteed booked
+          rates, and figures are illustrative while we finish integrating a licensed rate-data
+          source.
         </p>
 
         <div className="flex flex-wrap items-center gap-2 mb-4">
