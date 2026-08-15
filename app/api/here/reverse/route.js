@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
+import { getAuthedUser } from "../../../../lib/apiAuth";
 
 export async function GET(req) {
+  // HERE calls are billed per request — require a logged-in user so a
+  // stranger who finds this URL can't run up the API bill.
+  const user = await getAuthedUser(req);
+  if (!user) {
+    return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+  }
+
   const { searchParams } = new URL(req.url);
   const lat = searchParams.get("lat");
   const lng = searchParams.get("lng");
