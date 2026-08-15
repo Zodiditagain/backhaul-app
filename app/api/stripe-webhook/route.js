@@ -12,8 +12,16 @@ const supabaseAdmin = createClient(
 );
 
 function planFromPriceId(priceId) {
-  if (priceId === process.env.STRIPE_ROUTE_MAP_MONTHLY_PRICE_ID) return "monthly";
-  if (priceId === process.env.STRIPE_ROUTE_MAP_YEARLY_PRICE_ID) return "yearly";
+  const knownPriceIds = [
+    process.env.STRIPE_ROUTE_MAP_MONTHLY_PRICE_ID,
+    process.env.STRIPE_MARKET_PULSE_MONTHLY_PRICE_ID,
+  ];
+  const knownYearlyPriceIds = [
+    process.env.STRIPE_ROUTE_MAP_YEARLY_PRICE_ID,
+    process.env.STRIPE_MARKET_PULSE_YEARLY_PRICE_ID,
+  ];
+  if (knownPriceIds.includes(priceId)) return "monthly";
+  if (knownYearlyPriceIds.includes(priceId)) return "yearly";
   return null;
 }
 
