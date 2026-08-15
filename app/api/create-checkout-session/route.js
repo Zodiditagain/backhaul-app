@@ -10,12 +10,31 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+const PRODUCTS = {
+  route_map: {
+    monthly: process.env.STRIPE_ROUTE_MAP_MONTHLY_PRICE_ID,
+    yearly: process.env.STRIPE_ROUTE_MAP_YEARLY_PRICE_ID,
+    successPath: "/route-map",
+    cancelPath: "/route-map/subscribe",
+  },
+  market_pulse: {
+    monthly: process.env.STRIPE_MARKET_PULSE_MONTHLY_PRICE_ID,
+    yearly: process.env.STRIPE_MARKET_PULSE_YEARLY_PRICE_ID,
+    successPath: "/market-pulse",
+    cancelPath: "/market-pulse/subscribe",
+  },
+};
+
 export async function POST(req) {
   try {
-    const { userId, plan } = await req.json();
+    const { userId, plan, product = "route_map" } = await req.json();
 
     if (!userId || !plan || !["monthly", "yearly"].includes(plan)) {
       return NextResponse.json({ error: "Missing or invalid parameters." }, { status: 400 });
+    }
+    const productConfig = PRODUCTS[product];
+    if (!productConfig) {
+      return NextResponse.json({ error: "Unknown product." }, { status: 400 });
     }
 
     const { data: profile, error: profileError } = await supabaseAdmin
@@ -47,10 +66,13 @@ export async function POST(req) {
         .eq("id", userId);
     }
 
-    const priceId =
-      plan === "monthly"
-        ? process.env.STRIPE_ROUTE_MAP_MONTHLY_PRICE_ID
-        : process.env.STRIPE_ROUTE_MAP_YEARLY_PRICE_ID;
+    const priceId = plan === "monthly" ? productConfig.monthly : productConfig.yearly;
+    if (!priceId) {
+      return NextResponse.json(
+        { error: `No Stripe price configured for ${product} (${plan}).` },
+        { status: 500 }
+      );
+    }
 
     const origin = req.headers.get("origin") || "https://backhaul-app-iota.vercel.app";
 
@@ -60,10 +82,10 @@ export async function POST(req) {
       line_items: [{ price: priceId, quantity: 1 }],
       subscription_data: {
         trial_period_days: 7,
-        metadata: { supabase_user_id: userId, product: "route_map" },
+        metadata: { supabase_user_id: userId, product },
       },
-      success_url: `${origin}/route-map?checkout=success`,
-      cancel_url: `${origin}/route-map?checkout=canceled`,
+      success_url: `${origin}${productConfig.successPath}?checkout=success`,
+      cancel_url: `${origin}${productConfig.cancelPath}?checkout=canceled`,
     });
 
     return NextResponse.json({ url: session.url });
