@@ -268,6 +268,9 @@ export default function MatchThread({ match, user, role, onReviewSubmitted, onMe
                   {new Date(bol.pickup_date + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
                 </div>
               )}
+              {bol.rate_per_mile != null && (
+                <div><span className="text-gray-400">Rate:</span> ${Number(bol.rate_per_mile).toFixed(2)}/mi</div>
+              )}
               <div className={`font-mono uppercase tracking-wide font-semibold ${STATUS_COLORS[bol.status] || "text-gray-400"}`}>
                 Status: {STATUS_LABELS[bol.status] || bol.status}
               </div>
@@ -804,6 +807,7 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
           )}
 
           <ViewSection title="Charges & Terms">
+            <ViewRow label="Agreed Rate ($/mi)" value={bol.rate_per_mile != null ? Number(bol.rate_per_mile).toFixed(2) : null} />
             <ViewRow label="Freight Charges" value={bol.freight_charges} />
             <ViewRow label="Declared Value" value={bol.declared_value} />
             <ViewRow label="COD Amount" value={bol.cod_amount} />
