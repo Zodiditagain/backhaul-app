@@ -90,9 +90,13 @@ function MarketPulseSubscribeInner() {
           </div>
           <h1 className="text-2xl font-bold text-white mb-2">BackHaul Market Pulse</h1>
           <p className="text-gray-400 max-w-md mx-auto text-sm">
-            Southeast freight-market rate estimates by lane and equipment type — a heat map,
+            Nationwide freight-market rate estimates by lane and equipment type — a heat map,
             directional lane search, and BackHaul-verified rate confidence, so you know what a
             lane is actually worth before you negotiate.
+          </p>
+          <p className="text-gray-500 max-w-md mx-auto text-xs mt-3">
+            This is a preview feature. Figures are illustrative estimates to guide negotiation —
+            not guaranteed booked rates — while we finish integrating a licensed rate-data source.
           </p>
         </div>
 
@@ -141,10 +145,10 @@ function MarketPulseSubscribeInner() {
           <p className="text-xs uppercase font-medium tracking-wide text-gray-500 mb-3">What's included</p>
           <ul className="space-y-2 text-sm text-gray-300">
             <li className="flex items-center gap-2">
-              <Check size={14} className="text-amber-400 shrink-0" /> Southeast freight-market heat map by rate tier
+              <Check size={14} className="text-amber-400 shrink-0" /> Nationwide freight-market heat map by rate tier
             </li>
             <li className="flex items-center gap-2">
-              <Check size={14} className="text-amber-400 shrink-0" /> Dry van, reefer, and flatbed rate breakdowns
+              <Check size={14} className="text-amber-400 shrink-0" /> Dry van, reefer, flatbed, box truck, and hotshot rate breakdowns
             </li>
             <li className="flex items-center gap-2">
               <Check size={14} className="text-amber-400 shrink-0" /> Directional origin/destination lane search
