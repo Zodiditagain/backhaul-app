@@ -21,6 +21,8 @@ import {
   lanesBetween,
   nearestMarket,
   formatMinutesAgo,
+  rateTier,
+  confidenceFromCount,
 } from "../../lib/marketPulseData";
 
 export default function MarketPulsePage() {
@@ -49,10 +51,59 @@ export default function MarketPulsePage() {
 
   const [laneResult, setLaneResult] = useState(null);
   const [laneError, setLaneError] = useState("");
+  const [laneMarketSlugs, setLaneMarketSlugs] = useState(null);
+
+  // Real, BackHaul-verified rate data derived from completed Bills of Lading
+  // (see app/api/market-pulse/real-stats/route.js). Only ever aggregates —
+  // never raw loads or identities — and only appears once enough completed
+  // loads exist for a given market/lane + equipment. Everything else on this
+  // page (including all "Market Estimate" figures) stays synthetic until a
+  // licensed rate-data provider is integrated.
+  const [realStats, setRealStats] = useState({ marketStats: {}, laneStats: {} });
 
   useEffect(() => {
     checkAccess();
   }, []);
+
+  useEffect(() => {
+    if (!hasAccess) return;
+    let cancelled = false;
+    fetch("/api/market-pulse/real-stats")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data) {
+          setRealStats({ marketStats: data.marketStats || {}, laneStats: data.laneStats || {} });
+        }
+      })
+      .catch(() => {
+        // Real data is a bonus layer on top of the synthetic estimates —
+        // silently fall back rather than blocking the page.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hasAccess]);
+
+  // Blends a market's synthetic per-equipment stat with real completed-load
+  // data where available. "Market Estimate" is intentionally left untouched
+  // (always synthetic) — only the "Verified Avg" side ever gets replaced.
+  const getBlendedStat = useCallback(
+    (market, equipmentKey) => {
+      const base = market.equipment[equipmentKey];
+      const real = realStats.marketStats?.[market.slug]?.[equipmentKey];
+      if (!real) return { ...base, live: false };
+      return {
+        ...base,
+        verifiedAvg: real.avgRate,
+        transactionCount: real.count,
+        confidence: confidenceFromCount(real.count),
+        tier: rateTier(real.avgRate),
+        live: true,
+        lastUpdated: real.lastUpdated,
+      };
+    },
+    [realStats]
+  );
 
   async function checkAccess() {
     const {
@@ -160,7 +211,7 @@ export default function MarketPulsePage() {
     if (!H || !map || !marketMarkersGroup.current) return;
     marketMarkersGroup.current.removeAll();
     MARKETS.forEach((market) => {
-      const stat = market.equipment[equipment];
+      const stat = getBlendedStat(market, equipment);
       const tierMeta = TIER_META[stat.tier];
       const radius = 10 + Math.min(10, stat.transactionCount / 10);
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${radius * 2 + 6}" height="${radius * 2 + 6}" viewBox="0 0 ${radius * 2 + 6} ${radius * 2 + 6}">
@@ -177,7 +228,7 @@ export default function MarketPulsePage() {
       });
       marketMarkersGroup.current.addObject(marker);
     });
-  }, [equipment, mapsReady]);
+  }, [equipment, mapsReady, getBlendedStat]);
 
   const fetchPlaceSuggestions = useCallback(async (q, kind) => {
     if (q.trim().length < 3) {
@@ -225,6 +276,7 @@ export default function MarketPulsePage() {
   function searchLane() {
     setLaneError("");
     setLaneResult(null);
+    setLaneMarketSlugs(null);
     if (!originSlug || !destSlug) {
       setLaneError("Pick both an origin and a destination from the suggestions.");
       return;
@@ -235,8 +287,25 @@ export default function MarketPulsePage() {
     }
     const result = lanesBetween(originSlug, destSlug);
     setLaneResult(result);
+    setLaneMarketSlugs({ origin: originSlug, dest: destSlug });
     setSelectedSlug(null);
   }
+
+  // The lane search panel only ever compares dry-van rates (lanesBetween()
+  // is van-only by design), so blending only needs to check the van bucket.
+  const realLaneStat = laneMarketSlugs
+    ? realStats.laneStats?.[`${laneMarketSlugs.origin}->${laneMarketSlugs.dest}`]?.van
+    : null;
+  const laneOutbound = laneResult
+    ? realLaneStat
+      ? {
+          van: realLaneStat.avgRate,
+          transactionCount: realLaneStat.count,
+          confidence: confidenceFromCount(realLaneStat.count),
+          tier: rateTier(realLaneStat.avgRate),
+        }
+      : laneResult.outbound
+    : null;
 
   const selectedMarket = selectedSlug ? findMarket(selectedSlug) : null;
   const selectedLanes = selectedSlug ? lanesFromMarket(selectedSlug, 5) : [];
@@ -269,11 +338,12 @@ export default function MarketPulsePage() {
           </span>
         </div>
         <p className="text-xs text-gray-500 mb-6 max-w-2xl">
-          Preview feature — near-real-time market estimates blended with BackHaul's own
-          anonymized, verified activity — never a specific broker, carrier, customer, shipment,
-          or rate confirmation. These are estimates to help you negotiate, not guaranteed booked
-          rates, and figures are illustrative while we finish integrating a licensed rate-data
-          source.
+          Preview feature — market estimates blended with BackHaul's own anonymized, verified
+          activity from completed loads — never a specific broker, carrier, customer, shipment,
+          or rate confirmation. A green <span className="text-green-400 font-semibold">● Live</span> tag
+          means that figure is a real average from completed BackHaul loads; everywhere else is
+          still an illustrative estimate to help you negotiate, not a guaranteed booked rate, while
+          we finish integrating a licensed rate-data source.
         </p>
 
         <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -372,19 +442,32 @@ export default function MarketPulsePage() {
               <RateCard label="Market Estimate" value={laneResult.outbound.van} />
               <RateCard
                 label="BackHaul Verified Avg"
-                value={laneResult.outbound.van}
+                value={laneOutbound.van}
                 highlight
-                sub={`Based on ${laneResult.outbound.transactionCount} recent transactions`}
+                live={Boolean(realLaneStat)}
+                sub={
+                  realLaneStat
+                    ? `Based on ${laneOutbound.transactionCount} completed, BackHaul-verified loads`
+                    : `Based on ${laneOutbound.transactionCount} recent transactions`
+                }
               />
               <div>
                 <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Confidence</p>
-                <p className="text-lg font-semibold text-white">{laneResult.outbound.confidence}</p>
-                <TierBadge tier={laneResult.outbound.tier} />
+                <p className="text-lg font-semibold text-white">{laneOutbound.confidence}</p>
+                <TierBadge tier={laneOutbound.tier} />
               </div>
             </div>
             <p className="text-xs text-gray-500 mt-4">
               Reverse lane ({laneResult.destinationName} → {laneResult.originName}):{" "}
-              <span className="text-gray-300 font-medium">${laneResult.inbound.van.toFixed(2)}/mile</span>{" "}
+              <span className="text-gray-300 font-medium">
+                $
+                {(
+                  (laneMarketSlugs &&
+                    realStats.laneStats?.[`${laneMarketSlugs.dest}->${laneMarketSlugs.origin}`]?.van?.avgRate) ||
+                  laneResult.inbound.van
+                ).toFixed(2)}
+                /mile
+              </span>{" "}
               — directional rates can differ significantly on the same lane.
             </p>
           </div>
@@ -423,18 +506,21 @@ export default function MarketPulsePage() {
                   {EQUIPMENT_TYPES.find((e) => e.key === equipment).label}
                 </h3>
                 {(() => {
-                  const stat = selectedMarket.equipment[equipment];
+                  const stat = getBlendedStat(selectedMarket, equipment);
                   return (
                     <>
                       <div className="grid grid-cols-2 gap-3 mb-3">
                         <RateCard label="Market Estimate" value={stat.marketEstimate} compact />
-                        <RateCard label="Verified Avg" value={stat.verifiedAvg} compact highlight />
+                        <RateCard label="Verified Avg" value={stat.verifiedAvg} compact highlight live={stat.live} />
                       </div>
                       <p className="text-xs text-gray-500 mb-1">
-                        Based on {stat.transactionCount} recent transactions · Confidence: {stat.confidence}
+                        Based on {stat.transactionCount} {stat.live ? "completed, BackHaul-verified loads" : "recent transactions"} · Confidence: {stat.confidence}
                       </p>
                       <p className="text-xs text-gray-500 mb-3 flex items-center gap-1">
-                        <Clock size={12} /> Updated {formatMinutesAgo(stat.minutesAgo)}
+                        <Clock size={12} />{" "}
+                        {stat.live
+                          ? `Live — updated ${formatMinutesAgo(Math.max(0, Math.round((Date.now() - new Date(stat.lastUpdated).getTime()) / 60000)))}`
+                          : `Updated ${formatMinutesAgo(stat.minutesAgo)}`}
                       </p>
                       <div className="flex items-center gap-2 mb-4">
                         <TierBadge tier={stat.tier} />
@@ -447,25 +533,33 @@ export default function MarketPulsePage() {
                 })()}
                 <p className="text-xs text-gray-500 uppercase tracking-wide mb-2 mt-4">Top Lanes</p>
                 <div className="space-y-2">
-                  {selectedLanes.map((lane) => (
-                    <div
-                      key={lane.destinationSlug}
-                      className="flex items-center justify-between bg-slate-950 border border-slate-800 rounded-md px-3 py-2"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-xs text-gray-300 truncate">
-                          {selectedMarket.name} → {lane.destinationName}
-                        </p>
-                        <p className="text-[10px] text-gray-600">{lane.miles} mi</p>
+                  {selectedLanes.map((lane) => {
+                    const realLane = realStats.laneStats?.[`${selectedMarket.slug}->${lane.destinationSlug}`]?.[equipment];
+                    const displayRate = realLane ? realLane.avgRate : lane[equipment];
+                    const displayTier = realLane ? rateTier(realLane.avgRate) : lane.tier;
+                    return (
+                      <div
+                        key={lane.destinationSlug}
+                        className="flex items-center justify-between bg-slate-950 border border-slate-800 rounded-md px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-xs text-gray-300 truncate">
+                            {selectedMarket.name} → {lane.destinationName}
+                          </p>
+                          <p className="text-[10px] text-gray-600 flex items-center gap-1">
+                            {lane.miles} mi
+                            {realLane && <span className="text-green-400 font-semibold">· Live</span>}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0 ml-2">
+                          <p className="text-sm font-semibold text-white">
+                            ${displayRate.toFixed(2)}/mi
+                          </p>
+                          <TierBadge tier={displayTier} small />
+                        </div>
                       </div>
-                      <div className="text-right shrink-0 ml-2">
-                        <p className="text-sm font-semibold text-white">
-                          ${lane[equipment].toFixed(2)}/mi
-                        </p>
-                        <TierBadge tier={lane.tier} small />
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -476,10 +570,18 @@ export default function MarketPulsePage() {
   );
 }
 
-function RateCard({ label, value, sub, highlight, compact }) {
+function RateCard({ label, value, sub, highlight, compact, live }) {
   return (
     <div>
-      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{label}</p>
+      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+        {label}
+        {live && (
+          <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-green-400 normal-case tracking-normal">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+            Live
+          </span>
+        )}
+      </p>
       <p className={`font-bold ${compact ? "text-lg" : "text-2xl"} ${highlight ? "text-amber-400" : "text-white"}`}>
         ${value.toFixed(2)}<span className="text-sm font-normal text-gray-500">/mi</span>
       </p>
