@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { MessageCircle, Handshake, Fuel, Building2, Package as PackageIcon, Check, X, Truck, Map, ArrowRight } from "lucide-react";
-import { supabase } from "../lib/supabaseClient";
+import { supabase, authHeaders } from "../lib/supabaseClient";
 import GradeBadge, { computeStats } from "./GradeBadge";
 import MatchThread from "./MatchThread";
 
@@ -157,7 +157,7 @@ export default function TruckerDashboard({ user }) {
         const lng = pos.coords.longitude;
         let label = `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
         try {
-          const res = await fetch(`/api/here/reverse?lat=${lat}&lng=${lng}`);
+          const res = await fetch(`/api/here/reverse?lat=${lat}&lng=${lng}`, { headers: await authHeaders() });
           const data = await res.json();
           if (data.address) label = data.address;
         } catch {
