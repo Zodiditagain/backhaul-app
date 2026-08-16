@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Truck, LogOut, Settings, Shield, Calculator, Map, Activity } from "lucide-react";
+import { Truck, LogOut, Settings, Shield, Calculator, Map, Activity, Newspaper } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import TruckerDashboard from "../../components/TruckerDashboard";
 import MatchmakingDashboard from "../../components/MatchmakingDashboard";
@@ -12,6 +12,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [latestPost, setLatestPost] = useState(null);
   useEffect(() => {
     async function load() {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -31,6 +32,17 @@ export default function Dashboard() {
       } else {
         setProfile(profileData);
       }
+      // Row Level Security on blog_posts only returns posts that are live
+      // (published, or their scheduled auto-publish time has passed) — a
+      // pending draft never reaches this query, so nothing unreviewed can
+      // show up here.
+      const { data: postData } = await supabase
+        .from("blog_posts")
+        .select("slug, title, headline_stat, published_at, scheduled_publish_at")
+        .order("scheduled_publish_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      setLatestPost(postData || null);
       setLoading(false);
     }
     load();
@@ -106,6 +118,12 @@ export default function Dashboard() {
                 <Settings size={14} /> Edit Profile
               </Link>
             )}
+            <Link
+              href="/blog"
+              className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
+            >
+              <Newspaper size={14} /> Blog
+            </Link>
             <button
               onClick={handleLogout}
               className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
@@ -116,6 +134,49 @@ export default function Dashboard() {
         </div>
       </header>
       <main className="max-w-4xl mx-auto px-5 py-6">
+        {latestPost && (
+          <Link
+            href={`/blog/${latestPost.slug}`}
+            className="block bg-asphalt border border-amberx/30 hover:border-amberx rounded-sm p-4 mb-6 transition"
+          >
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="min-w-0">
+                <p className="text-amberx text-[10px] uppercase tracking-widest font-mono mb-1">
+                  From the Backhaul Blog
+                </p>
+                <p className="text-white font-semibold text-sm mb-1.5 truncate">{latestPost.title}</p>
+                {latestPost.headline_stat?.value && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-lg font-bold text-white">{latestPost.headline_stat.value}</span>
+                    {latestPost.headline_stat.delta && (
+                      <span
+                        className={`inline-flex items-center gap-1 text-[11px] font-mono border rounded-full px-2 py-0.5 ${
+                          latestPost.headline_stat.direction === "good"
+                            ? "bg-green-500/15 text-green-400 border-green-500/40"
+                            : latestPost.headline_stat.direction === "bad"
+                            ? "bg-red-500/15 text-red-400 border-red-500/40"
+                            : "bg-blue-500/15 text-blue-400 border-blue-500/40"
+                        }`}
+                      >
+                        <span>
+                          {latestPost.headline_stat.direction === "good"
+                            ? "▲"
+                            : latestPost.headline_stat.direction === "bad"
+                            ? "▼"
+                            : "•"}
+                        </span>
+                        {latestPost.headline_stat.delta}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+              <span className="shrink-0 text-xs font-mono uppercase tracking-wide bg-amberx text-asphalt px-3 py-2 rounded-sm">
+                Read More
+              </span>
+            </div>
+          </Link>
+        )}
         {profile.role === "trucker" ? (
           <TruckerDashboard user={user} />
         ) : (
