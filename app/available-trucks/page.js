@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Truck, MapPin, Clock, Loader2, Crosshair } from "lucide-react";
-import { supabase } from "../../lib/supabaseClient";
+import { supabase, authHeaders } from "../../lib/supabaseClient";
 import { formatMinutesAgo } from "../../lib/marketPulseData";
 
 // Available postings are treated as live only for this many hours after the
@@ -117,7 +117,7 @@ export default function AvailableTrucksPage() {
     }
     try {
       const params = new URLSearchParams({ q, lat: "39.5", lng: "-98.35" });
-      const res = await fetch(`/api/here/autocomplete?${params.toString()}`);
+      const res = await fetch(`/api/here/autocomplete?${params.toString()}`, { headers: await authHeaders() });
       const data = await res.json();
       setSearchSuggestions((data.items || []).filter((i) => i.lat !== null && i.lng !== null));
     } catch {
