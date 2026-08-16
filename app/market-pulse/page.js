@@ -11,7 +11,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
-import { supabase } from "../../lib/supabaseClient";
+import { supabase, authHeaders } from "../../lib/supabaseClient";
 import {
   MARKETS,
   EQUIPMENT_TYPES,
@@ -68,7 +68,8 @@ export default function MarketPulsePage() {
   useEffect(() => {
     if (!hasAccess) return;
     let cancelled = false;
-    fetch("/api/market-pulse/real-stats")
+    authHeaders()
+      .then((headers) => fetch("/api/market-pulse/real-stats", { headers }))
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!cancelled && data) {
@@ -237,7 +238,7 @@ export default function MarketPulsePage() {
     }
     try {
       const params = new URLSearchParams({ q, lat: "39.5", lng: "-98.35" });
-      const res = await fetch(`/api/here/autocomplete?${params.toString()}`);
+      const res = await fetch(`/api/here/autocomplete?${params.toString()}`, { headers: await authHeaders() });
       const data = await res.json();
       const items = (data.items || []).filter((i) => i.lat !== null && i.lng !== null);
       kind === "origin" ? setOriginSuggestions(items) : setDestSuggestions(items);
