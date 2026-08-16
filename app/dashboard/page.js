@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Truck, LogOut, Settings, Shield, Calculator, Map, Activity, Newspaper } from "lucide-react";
+import { Truck, LogOut, Settings, Shield, Calculator, Map, Activity, Newspaper, ShieldCheck } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import TruckerDashboard from "../../components/TruckerDashboard";
 import MatchmakingDashboard from "../../components/MatchmakingDashboard";
@@ -13,6 +13,7 @@ export default function Dashboard() {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [latestPost, setLatestPost] = useState(null);
+  const [tipOfDay, setTipOfDay] = useState(null);
   useEffect(() => {
     async function load() {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -31,6 +32,27 @@ export default function Dashboard() {
         console.error(error);
       } else {
         setProfile(profileData);
+      }
+      // Safety Tip of the Day: a fixed, pre-written library (not AI-generated
+      // day to day — see safety_tips table) rotated deterministically by
+      // day-of-year, filtered to tips tagged "all" plus whichever audience
+      // matches this user's role. Same tip shows all day, changes daily,
+      // no server-side scheduling needed.
+      const audienceBucket =
+        profileData?.role === "trucker"
+          ? "trucker"
+          : profileData?.role === "broker" || profileData?.role === "vendor"
+          ? "broker_vendor"
+          : null;
+      const { data: tipsData } = await supabase
+        .from("safety_tips")
+        .select("title, body")
+        .in("audience", audienceBucket ? ["all", audienceBucket] : ["all"])
+        .order("sort_order", { ascending: true });
+      if (tipsData && tipsData.length > 0) {
+        const startOfYear = new Date(new Date().getFullYear(), 0, 0);
+        const dayOfYear = Math.floor((new Date() - startOfYear) / 86400000);
+        setTipOfDay(tipsData[dayOfYear % tipsData.length]);
       }
       // Row Level Security on blog_posts only returns posts that are live
       // (published, or their scheduled auto-publish time has passed) — a
@@ -134,6 +156,16 @@ export default function Dashboard() {
         </div>
       </header>
       <main className="max-w-4xl mx-auto px-5 py-6">
+        {tipOfDay && (
+          <div className="bg-asphalt border border-highway/30 rounded-sm p-4 mb-4">
+            <div className="flex items-center gap-1.5 mb-2">
+              <ShieldCheck size={14} className="text-highway" />
+              <p className="text-highway text-[10px] uppercase tracking-widest font-mono">Safety Tip of the Day</p>
+            </div>
+            <p className="text-white font-semibold text-sm mb-1">{tipOfDay.title}</p>
+            <p className="text-gray-400 text-xs leading-relaxed">{tipOfDay.body}</p>
+          </div>
+        )}
         {latestPost && (
           <Link
             href={`/blog/${latestPost.slug}`}
