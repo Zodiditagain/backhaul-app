@@ -86,6 +86,10 @@ export default function Home() {
           Log In
         </Link>
       </div>
+
+      <Link href="/blog" className="text-gray-500 hover:text-gray-300 text-xs mt-6 underline">
+        Read our blog
+      </Link>
     </div>
   );
 }
