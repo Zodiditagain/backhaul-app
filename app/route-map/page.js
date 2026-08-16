@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { decode as decodeFlexPolyline } from "@here/flexpolyline";
-import { supabase } from "../../lib/supabaseClient";
+import { supabase, authHeaders } from "../../lib/supabaseClient";
 function haversineMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
   const toRad = (d) => (d * Math.PI) / 180;
@@ -349,7 +349,7 @@ export default function RouteMapPage() {
         params.set("lat", bias.lat);
         params.set("lng", bias.lng);
       }
-      const res = await fetch(`/api/here/autocomplete?${params.toString()}`);
+      const res = await fetch(`/api/here/autocomplete?${params.toString()}`, { headers: await authHeaders() });
       const data = await res.json();
       const items = (data.items || []).filter((i) => i.lat !== null && i.lng !== null);
       kind === "origin" ? setOriginSuggestions(items) : setDestSuggestions(items);
@@ -391,7 +391,7 @@ export default function RouteMapPage() {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
         try {
-          const res = await fetch(`/api/here/reverse?lat=${lat}&lng=${lng}`);
+          const res = await fetch(`/api/here/reverse?lat=${lat}&lng=${lng}`, { headers: await authHeaders() });
           const data = await res.json();
           const address = data.address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
           setOrigin({ lat, lng, address });
