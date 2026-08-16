@@ -122,6 +122,15 @@ export default function Dashboard() {
           <MatchmakingDashboard user={user} role={profile.role} />
         )}
       </main>
+      <footer className="max-w-4xl mx-auto px-5 py-6 flex items-center justify-center gap-3 text-xs text-gray-400">
+        <Link href="/privacy" target="_blank" className="hover:text-amberx underline">
+          Privacy Policy
+        </Link>
+        <span className="text-gray-300">·</span>
+        <Link href="/terms" target="_blank" className="hover:text-amberx underline">
+          Terms of Service
+        </Link>
+      </footer>
     </div>
   );
 }
