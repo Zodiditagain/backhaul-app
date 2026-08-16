@@ -307,12 +307,20 @@ export default function AdminPage() {
               <p className="text-gray-400 text-[11px] uppercase tracking-widest mt-0.5">Backhaul Back Office</p>
             </div>
           </div>
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
-          >
-            <ArrowLeft size={14} /> Back to Dashboard
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/admin/blog"
+              className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
+            >
+              <FileText size={14} /> Blog Review
+            </Link>
+            <Link
+              href="/dashboard"
+              className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
+            >
+              <ArrowLeft size={14} /> Back to Dashboard
+            </Link>
+          </div>
         </div>
       </header>
 
