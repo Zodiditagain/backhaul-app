@@ -16,6 +16,10 @@ import {
   Crosshair,
   RotateCcw,
   RotateCw,
+  Plus,
+  ChevronUp,
+  ChevronDown,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { decode as decodeFlexPolyline } from "@here/flexpolyline";
@@ -91,6 +95,13 @@ function poiIconSvg(type) {
     <text x="15" y="20" font-size="14" text-anchor="middle">${emoji}</text>
   </svg>`;
 }
+function stopIconSvg(number) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="34" viewBox="0 0 30 34">
+    <ellipse cx="15" cy="30" rx="8" ry="3" fill="black" opacity="0.25"/>
+    <circle cx="15" cy="15" r="13" fill="#7c3aed" stroke="white" stroke-width="2.5"/>
+    <text x="15" y="20" font-size="13" font-weight="bold" text-anchor="middle" fill="white">${number}</text>
+  </svg>`;
+}
 const OFF_ROUTE_METERS = 150;
 const REROUTE_COOLDOWN_MS = 20000;
 const OFF_ROUTE_CONFIRM_COUNT = 1;
@@ -108,6 +119,11 @@ export default function RouteMapPage() {
   const [destSuggestions, setDestSuggestions] = useState([]);
   const [destination, setDestination] = useState(null);
   const [showDestList, setShowDestList] = useState(false);
+  // Up to MAX_STOPS waypoints between origin and destination. Each item:
+  // { key, query, suggestions, point, showList }. point stays null until an
+  // actual suggestion is picked, mirroring how origin/destination work.
+  const [stops, setStops] = useState([]);
+  const MAX_STOPS = 6;
   const [routeResult, setRouteResult] = useState(null);
   const [routing, setRouting] = useState(false);
   const [error, setError] = useState("");
@@ -138,6 +154,11 @@ export default function RouteMapPage() {
   const voiceEnabledRef = useRef(true);
   const destinationRef = useRef(null);
   const truckSpecsRef = useRef(null);
+  // Stops not yet reached during active navigation — shrinks as each one is
+  // passed, so a mid-trip reroute knows which stops still need visiting
+  // instead of routing straight past them to the final destination.
+  const remainingWaypointsRef = useRef([]);
+  const stopDebounceRef = useRef({});
   const rerouteLockRef = useRef(false);
   const lastRerouteRef = useRef(0);
   const offRouteStreakRef = useRef(0);
@@ -378,6 +399,60 @@ export default function RouteMapPage() {
       setShowDestList(false);
     }
   }
+  function addStop() {
+    setStops((prev) => {
+      if (prev.length >= MAX_STOPS) return prev;
+      return [...prev, { key: `${Date.now()}-${prev.length}-${Math.random()}`, query: "", suggestions: [], point: null, showList: false }];
+    });
+  }
+  function removeStop(key) {
+    clearTimeout(stopDebounceRef.current[key]);
+    delete stopDebounceRef.current[key];
+    setStops((prev) => prev.filter((s) => s.key !== key));
+  }
+  function moveStop(key, dir) {
+    setStops((prev) => {
+      const idx = prev.findIndex((s) => s.key === key);
+      const newIdx = idx + dir;
+      if (idx < 0 || newIdx < 0 || newIdx >= prev.length) return prev;
+      const copy = [...prev];
+      [copy[idx], copy[newIdx]] = [copy[newIdx], copy[idx]];
+      return copy;
+    });
+  }
+  async function fetchStopSuggestions(key, q) {
+    if (q.trim().length < 3) {
+      setStops((prev) => prev.map((s) => (s.key === key ? { ...s, suggestions: [] } : s)));
+      return;
+    }
+    try {
+      const params = new URLSearchParams({ q });
+      const bias = searchBiasRef.current;
+      if (bias) {
+        params.set("lat", bias.lat);
+        params.set("lng", bias.lng);
+      }
+      const res = await fetch(`/api/here/autocomplete?${params.toString()}`, { headers: await authHeaders() });
+      const data = await res.json();
+      const items = (data.items || []).filter((i) => i.lat !== null && i.lng !== null);
+      setStops((prev) => prev.map((s) => (s.key === key ? { ...s, suggestions: items } : s)));
+    } catch {
+      // silent fail on suggestions
+    }
+  }
+  function updateStopQuery(key, value) {
+    setStops((prev) => prev.map((s) => (s.key === key ? { ...s, query: value, point: null, showList: true } : s)));
+    clearTimeout(stopDebounceRef.current[key]);
+    stopDebounceRef.current[key] = setTimeout(() => fetchStopSuggestions(key, value), 300);
+  }
+  function selectStopSuggestion(key, s) {
+    if (s.lat === null || s.lng === null) return;
+    setStops((prev) =>
+      prev.map((st) =>
+        st.key === key ? { ...st, point: { lat: s.lat, lng: s.lng, address: s.address }, query: s.address, showList: false } : st
+      )
+    );
+  }
   const [locatingOrigin, setLocatingOrigin] = useState(false);
   function useCurrentLocationAsOrigin() {
     if (!navigator.geolocation) {
@@ -416,16 +491,22 @@ export default function RouteMapPage() {
       setError("Choose both an origin and a destination from the suggestions.");
       return;
     }
+    if (stops.some((s) => !s.point)) {
+      setError("Choose an address from the suggestions for every stop, or remove the ones you haven't picked yet.");
+      return;
+    }
     setError("");
     setRouting(true);
     setRouteResult(null);
     setShowDirections(false);
     if (isNavigating) endNavigation();
+    const waypointPoints = stops.map((s) => s.point);
+    remainingWaypointsRef.current = waypointPoints;
     try {
       const res = await fetch("/api/here/route", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ origin, destination, truckSpecs }),
+        body: JSON.stringify({ origin, destination, waypoints: waypointPoints, truckSpecs }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -434,14 +515,14 @@ export default function RouteMapPage() {
         return;
       }
       setRouteResult(data);
-      drawRoute(data.polyline, origin, destination);
+      drawRoute(data.polyline, origin, destination, waypointPoints);
     } catch {
       setError("Network error reaching the routing service.");
     } finally {
       setRouting(false);
     }
   }
-  function drawRoute(polyline, o, d) {
+  function drawRoute(polyline, o, d, waypointPoints = []) {
     const H = window.H;
     const map = mapInstance.current;
     if (!H || !map || !o || !d || !mapObjectsGroup.current) return;
@@ -476,6 +557,10 @@ export default function RouteMapPage() {
       originMarkerRef.current = originMarker;
       objectsToAdd.push(originMarker);
     }
+    waypointPoints.forEach((wp, i) => {
+      const icon = new H.map.Icon(stopIconSvg(i + 1), { size: { w: 30, h: 34 }, anchor: { x: 15, y: 15 } });
+      objectsToAdd.push(new H.map.Marker({ lat: wp.lat, lng: wp.lng }, { icon }));
+    });
     const destMarker = new H.map.Marker({ lat: d.lat, lng: d.lng });
     objectsToAdd.push(destMarker);
     mapObjectsGroup.current.addObjects(objectsToAdd);
@@ -523,7 +608,7 @@ export default function RouteMapPage() {
     const icon = new H.map.Icon(poiIconSvg(poi.type), {
       size: { w: 30, h: 34 },
       anchor: { x: 15, y: 15 },
-    });        
+    });
         const marker = new H.map.Marker({ lat: poi.lat, lng: poi.lng }, { icon });
         marker.setData(poi);
         marker.addEventListener("tap", (evt) => {
@@ -605,6 +690,13 @@ export default function RouteMapPage() {
       const next = idx + 1;
       currentStepIndexRef.current = next;
       setCurrentStepIndex(next);
+      if (step.actionType === "arrive") {
+        // This stop has been reached — drop it from the list a reroute
+        // would need to route through, so a later reroute goes to the
+        // remaining stops (and then the destination), not straight past
+        // this one.
+        remainingWaypointsRef.current = remainingWaypointsRef.current.slice(1);
+      }
     }
   }
   function pointToSegmentMeters(lat, lng, lat1, lng1, lat2, lng2) {
@@ -685,13 +777,14 @@ export default function RouteMapPage() {
         body: JSON.stringify({
           origin: { lat, lng },
           destination: dest,
+          waypoints: remainingWaypointsRef.current,
           truckSpecs: truckSpecsRef.current,
         }),
       });
       const data = await res.json();
       if (res.ok) {
         setRouteResult(data);
-        drawRoute(data.polyline, { lat, lng }, dest);
+        drawRoute(data.polyline, { lat, lng }, dest, remainingWaypointsRef.current);
       }
     } catch {
       // silent fail — will retry on next off-route check after cooldown
@@ -964,9 +1057,91 @@ export default function RouteMapPage() {
           </div>
         )}
         {!isNavigating && (
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-medium text-gray-400">Stops along the way (optional)</label>
+              {stops.length < MAX_STOPS && (
+                <button
+                  type="button"
+                  onClick={addStop}
+                  className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
+                >
+                  <Plus size={12} /> Add Stop
+                </button>
+              )}
+            </div>
+            {stops.length === 0 ? (
+              <p className="text-xs text-gray-600">
+                Add up to {MAX_STOPS} stops between your origin and destination.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {stops.map((stop, idx) => (
+                  <div key={stop.key} className="relative flex items-center gap-2">
+                    <span className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-violet-600 text-white text-xs font-mono font-semibold">
+                      {idx + 1}
+                    </span>
+                    <div className="relative flex-1">
+                      <input
+                        value={stop.query}
+                        onChange={(e) => updateStopQuery(stop.key, e.target.value)}
+                        onFocus={() =>
+                          setStops((prev) => prev.map((s) => (s.key === stop.key ? { ...s, showList: true } : s)))
+                        }
+                        placeholder="Enter a city, address, or zip"
+                        className="w-full bg-slate-900 border border-slate-800 text-white text-sm rounded-md py-2 px-3 focus:outline-none focus:border-blue-500"
+                      />
+                      {stop.showList && stop.suggestions.length > 0 && (
+                        <div className="absolute z-10 mt-1 w-full bg-slate-900 border border-slate-800 rounded-md overflow-hidden shadow-lg">
+                          {stop.suggestions.map((s) => (
+                            <button
+                              key={s.id}
+                              onClick={() => selectStopSuggestion(stop.key, s)}
+                              className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-slate-800 flex items-start gap-2"
+                            >
+                              <MapPin size={14} className="mt-0.5 text-gray-500 flex-shrink-0" />
+                              <span>{s.address}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => moveStop(stop.key, -1)}
+                      disabled={idx === 0}
+                      title="Move up"
+                      className="text-gray-500 hover:text-white disabled:opacity-30 disabled:hover:text-gray-500"
+                    >
+                      <ChevronUp size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveStop(stop.key, 1)}
+                      disabled={idx === stops.length - 1}
+                      title="Move down"
+                      className="text-gray-500 hover:text-white disabled:opacity-30 disabled:hover:text-gray-500"
+                    >
+                      <ChevronDown size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeStop(stop.key)}
+                      title="Remove stop"
+                      className="text-gray-500 hover:text-red-400"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {!isNavigating && (
           <button
             onClick={handleGetRoute}
-            disabled={routing || !origin || !destination}
+            disabled={routing || !origin || !destination || stops.some((s) => !s.point)}
             className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-800 disabled:text-gray-500 text-white text-sm font-semibold py-2.5 px-5 rounded-md transition flex items-center gap-2 mb-4"
           >
             {routing && <Loader2 size={16} className="animate-spin" />}
@@ -992,8 +1167,10 @@ export default function RouteMapPage() {
           </div>
         )}
         {isNavigating && currentStep && (
-          <div className="bg-blue-600 rounded-md px-4 py-4 mb-4">
-            <p className="text-xs text-blue-200 uppercase tracking-wide mb-1">Next</p>
+          <div className={`rounded-md px-4 py-4 mb-4 ${currentStep.actionType === "arrive" ? "bg-violet-600" : "bg-blue-600"}`}>
+            <p className={`text-xs uppercase tracking-wide mb-1 ${currentStep.actionType === "arrive" ? "text-violet-200" : "text-blue-200"}`}>
+              {currentStep.actionType === "arrive" ? "Stop Ahead" : "Next"}
+            </p>
             <p className="text-lg font-semibold text-white leading-snug">
               {currentStep.instruction}
             </p>
@@ -1040,13 +1217,17 @@ export default function RouteMapPage() {
                 {routeResult.actions.map((step, i) => (
                   <div
                     key={i}
-                    className="flex items-start gap-3 px-4 py-3 border-b border-slate-800 last:border-b-0"
+                    className={`flex items-start gap-3 px-4 py-3 border-b border-slate-800 last:border-b-0 ${
+                      step.actionType === "arrive" ? "bg-violet-500/10" : ""
+                    }`}
                   >
                     <span className="text-xs font-mono text-gray-600 mt-0.5 w-5 shrink-0">
                       {i + 1}
                     </span>
                     <div className="min-w-0">
-                      <p className="text-sm text-gray-200">{step.instruction}</p>
+                      <p className={`text-sm ${step.actionType === "arrive" ? "text-violet-300 font-semibold" : "text-gray-200"}`}>
+                        {step.instruction}
+                      </p>
                       {step.distanceMeters > 0 && (
                         <p className="text-xs text-gray-500 mt-0.5">
                           {formatDistance(step.distanceMeters)}
