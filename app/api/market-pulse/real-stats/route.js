@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { MARKETS } from "../../../../lib/marketPulseData";
+import { getAuthedUser } from "../../../../lib/apiAuth";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -68,8 +69,29 @@ function summarize(buckets) {
 // BOL row, a company name, or anything else that could identify a specific
 // shipment or party. Markets/lanes with fewer than MIN_SAMPLE_SIZE completed
 // loads are omitted entirely rather than exposing a near-single-load "average".
-export async function GET() {
+export async function GET(req) {
+  // This data sits behind the Market Pulse paywall in the UI — enforce that
+  // server-side too, or anyone who finds this URL gets the real verified
+  // rates for free without ever subscribing.
+  const user = await getAuthedUser(req);
+  if (!user) {
+    return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+  }
+
   try {
+    const { data: sub } = await supabaseAdmin
+      .from("subscriptions")
+      .select("status")
+      .eq("user_id", user.id)
+      .eq("product", "market_pulse")
+      .in("status", ["trialing", "active"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!sub) {
+      return NextResponse.json({ error: "Market Pulse subscription required." }, { status: 403 });
+    }
+
     const { data: bols, error } = await supabaseAdmin
       .from("bols")
       .select(
