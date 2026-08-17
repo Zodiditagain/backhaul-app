@@ -20,6 +20,10 @@ import {
   ChevronUp,
   ChevronDown,
   Trash2,
+  Flag,
+  ShieldAlert,
+  Camera,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { decode as decodeFlexPolyline } from "@here/flexpolyline";
@@ -102,6 +106,16 @@ function stopIconSvg(number) {
     <text x="15" y="20" font-size="13" font-weight="bold" text-anchor="middle" fill="white">${number}</text>
   </svg>`;
 }
+const ROUTE_PROBLEM_CATEGORIES = [
+  { value: "low_bridge", label: "Low Bridge" },
+  { value: "weight_restriction", label: "Weight Restriction" },
+  { value: "truck_prohibited", label: "Truck Prohibited" },
+  { value: "road_closure", label: "Road Closure" },
+  { value: "bad_turn", label: "Bad Turn" },
+  { value: "wrong_entrance", label: "Wrong Entrance" },
+  { value: "construction", label: "Construction" },
+  { value: "other", label: "Other" },
+];
 const OFF_ROUTE_METERS = 150;
 const REROUTE_COOLDOWN_MS = 20000;
 const OFF_ROUTE_CONFIRM_COUNT = 1;
@@ -110,7 +124,16 @@ export default function RouteMapPage() {
   const router = useRouter();
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [hasAccess, setHasAccess] = useState(false);
-  const [truckSpecs, setTruckSpecs] = useState(null);
+  const [truckProfiles, setTruckProfiles] = useState([]);
+  const [selectedProfileId, setSelectedProfileId] = useState("");
+  const selectedProfile = truckProfiles.find((p) => p.id === selectedProfileId) || null;
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportCategory, setReportCategory] = useState("low_bridge");
+  const [reportDescription, setReportDescription] = useState("");
+  const [reportPhotoFile, setReportPhotoFile] = useState(null);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportError, setReportError] = useState("");
+  const [reportSuccess, setReportSuccess] = useState(false);
   const [originQuery, setOriginQuery] = useState("");
   const [originSuggestions, setOriginSuggestions] = useState([]);
   const [origin, setOrigin] = useState(null);
@@ -153,7 +176,7 @@ export default function RouteMapPage() {
   const actionPointsRef = useRef([]);
   const voiceEnabledRef = useRef(true);
   const destinationRef = useRef(null);
-  const truckSpecsRef = useRef(null);
+  const selectedProfileRef = useRef(null);
   // Stops not yet reached during active navigation — shrinks as each one is
   // passed, so a mid-trip reroute knows which stops still need visiting
   // instead of routing straight past them to the final destination.
@@ -192,8 +215,8 @@ export default function RouteMapPage() {
     destinationRef.current = destination;
   }, [destination]);
   useEffect(() => {
-    truckSpecsRef.current = truckSpecs;
-  }, [truckSpecs]);
+    selectedProfileRef.current = selectedProfile;
+  }, [selectedProfile]);
   useEffect(() => {
     checkAccess();
   }, []);
@@ -230,13 +253,16 @@ export default function RouteMapPage() {
       router.push("/route-map/subscribe");
       return;
     }
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("truck_height_inches, truck_weight_lbs, truck_length_feet, truck_axle_count")
-      .eq("id", user.id)
-      .maybeSingle();
-    if (profile) {
-      setTruckSpecs(profile);
+    const { data: profiles } = await supabase
+      .from("truck_profiles")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("is_default", { ascending: false })
+      .order("created_at", { ascending: false });
+    if (profiles && profiles.length > 0) {
+      setTruckProfiles(profiles);
+      const def = profiles.find((p) => p.is_default) || profiles[0];
+      setSelectedProfileId(def.id);
     }
     setHasAccess(true);
     setCheckingAccess(false);
@@ -506,7 +532,7 @@ export default function RouteMapPage() {
       const res = await fetch("/api/here/route", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ origin, destination, waypoints: waypointPoints, truckSpecs }),
+        body: JSON.stringify({ origin, destination, waypoints: waypointPoints, truckProfile: selectedProfile }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -521,6 +547,64 @@ export default function RouteMapPage() {
     } finally {
       setRouting(false);
     }
+  }
+  function closeReportModal() {
+    setReportModalOpen(false);
+    setReportCategory("low_bridge");
+    setReportDescription("");
+    setReportPhotoFile(null);
+    setReportError("");
+    setReportSuccess(false);
+  }
+  async function submitRouteReport() {
+    setReportSubmitting(true);
+    setReportError("");
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+    let photoUrl = null;
+    if (reportPhotoFile) {
+      const ext = reportPhotoFile.name.split(".").pop();
+      const path = `${user.id}/${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("route-report-photos")
+        .upload(path, reportPhotoFile);
+      if (!uploadError) {
+        const { data: publicUrlData } = supabase.storage
+          .from("route-report-photos")
+          .getPublicUrl(path);
+        photoUrl = publicUrlData?.publicUrl || null;
+      }
+      // If the upload fails (e.g. the storage bucket hasn't been created
+      // yet), we still submit the report without a photo rather than
+      // blocking the driver from reporting a real hazard.
+    }
+    const pos = isNavigatingRef.current ? lastPositionRef.current : null;
+    const routeRef =
+      origin?.address && destination?.address
+        ? `${origin.address} -> ${destination.address}`
+        : null;
+    const { error: insertError } = await supabase.from("route_reports").insert({
+      user_id: user.id,
+      route_ref: routeRef,
+      truck_profile_id: selectedProfileRef.current?.id || null,
+      category: reportCategory,
+      description: reportDescription || null,
+      lat: pos?.lat ?? null,
+      lng: pos?.lng ?? null,
+      photo_url: photoUrl,
+    });
+    if (insertError) {
+      setReportError("Couldn't submit your report. Try again.");
+      setReportSubmitting(false);
+      return;
+    }
+    setReportSubmitting(false);
+    setReportSuccess(true);
   }
   function drawRoute(polyline, o, d, waypointPoints = []) {
     const H = window.H;
@@ -778,7 +862,7 @@ export default function RouteMapPage() {
           origin: { lat, lng },
           destination: dest,
           waypoints: remainingWaypointsRef.current,
-          truckSpecs: truckSpecsRef.current,
+          truckProfile: selectedProfileRef.current,
         }),
       });
       const data = await res.json();
@@ -943,12 +1027,7 @@ export default function RouteMapPage() {
     if (hours === 0) return `${minutes} min`;
     return `${hours} hr ${minutes} min`;
   }
-  const hasTruckSpecs =
-    truckSpecs &&
-    (truckSpecs.truck_height_inches ||
-      truckSpecs.truck_weight_lbs ||
-      truckSpecs.truck_length_feet ||
-      truckSpecs.truck_axle_count);
+  const hasTruckProfile = !!selectedProfile;
   const currentStep = actionPoints[currentStepIndex];
   if (checkingAccess) {
     return (
@@ -971,16 +1050,23 @@ export default function RouteMapPage() {
           <Truck size={22} className="text-blue-400" />
           <h1 className="text-2xl font-bold text-white">Route Map</h1>
         </div>
-        {hasTruckSpecs ? (
-          <p className="text-xs text-amber-400 mb-6">
-            Routing with your truck specs — restricted roads and low bridges will be avoided.
+        {hasTruckProfile ? (
+          <p className="text-xs text-amber-400 mb-2">
+            Routing with <span className="font-semibold">{selectedProfile.profile_name}</span> —
+            restricted roads, low bridges, and weight limits for this vehicle will be avoided.
           </p>
         ) : (
-          <p className="text-xs text-gray-500 mb-6">
-            No truck dimensions on file yet — routes will use standard truck defaults. Add your
-            height, weight, length, and axle count in your profile for restricted routing.
-              </p>
+          <p className="text-xs text-gray-500 mb-2">
+            No truck profile selected — routes will use general truck defaults only, without your
+            specific dimensions or weight.
+          </p>
         )}
+        <Link
+          href="/truck-profiles"
+          className="inline-block text-xs text-blue-400 hover:text-blue-300 mb-6"
+        >
+          Manage Truck Profiles →
+        </Link>
         {!isNavigating && (
           <div className="grid md:grid-cols-2 gap-4 mb-4">
             <div className="relative">
@@ -1139,6 +1225,52 @@ export default function RouteMapPage() {
           </div>
         )}
         {!isNavigating && (
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-medium text-gray-400">Selected Truck Profile</label>
+              <Link href="/truck-profiles" className="text-xs text-blue-400 hover:text-blue-300">
+                Manage Profiles
+              </Link>
+            </div>
+            {truckProfiles.length === 0 ? (
+              <p className="text-xs text-gray-600">
+                No saved profiles yet.{" "}
+                <Link href="/truck-profiles" className="text-blue-400 hover:text-blue-300">
+                  Add your truck
+                </Link>{" "}
+                to route around its specific restrictions.
+              </p>
+            ) : (
+              <>
+                <select
+                  value={selectedProfileId}
+                  onChange={(e) => setSelectedProfileId(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-800 text-white text-sm rounded-md py-2.5 px-3 focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">No truck profile (general truck defaults)</option>
+                  {truckProfiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.profile_name}
+                      {p.is_default ? " (default)" : ""}
+                    </option>
+                  ))}
+                </select>
+                {selectedProfile && (
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[11px] text-gray-500">
+                    {selectedProfile.gross_weight_lbs && (
+                      <span>GVW {Number(selectedProfile.gross_weight_lbs).toLocaleString()} lb</span>
+                    )}
+                    {selectedProfile.axle_count && <span>{selectedProfile.axle_count} axles</span>}
+                    {selectedProfile.hazmat && <span className="text-red-400">Hazmat</span>}
+                    {selectedProfile.avoid_tolls && <span>Avoiding tolls</span>}
+                    {selectedProfile.avoid_ferries && <span>Avoiding ferries</span>}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+        {!isNavigating && (
           <button
             onClick={handleGetRoute}
             disabled={routing || !origin || !destination || stops.some((s) => !s.point)}
@@ -1147,6 +1279,16 @@ export default function RouteMapPage() {
             {routing && <Loader2 size={16} className="animate-spin" />}
             {routing ? "Calculating route..." : "Get Route"}
           </button>
+        )}
+        {!isNavigating && (
+          <p className="flex items-start gap-1.5 text-[11px] text-gray-600 mb-4">
+            <ShieldAlert size={13} className="mt-0.5 shrink-0" />
+            <span>
+              Commercial Truck Route: Routing considers available vehicle dimensions and known
+              commercial restrictions. Always obey posted road signs, temporary restrictions,
+              construction controls, and law-enforcement instructions.
+            </span>
+          </p>
         )}
         {error && (
           <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/30 rounded-md py-2 px-3 mb-4">
@@ -1168,12 +1310,23 @@ export default function RouteMapPage() {
         )}
         {isNavigating && currentStep && (
           <div className={`rounded-md px-4 py-4 mb-4 ${currentStep.actionType === "arrive" ? "bg-violet-600" : "bg-blue-600"}`}>
-            <p className={`text-xs uppercase tracking-wide mb-1 ${currentStep.actionType === "arrive" ? "text-violet-200" : "text-blue-200"}`}>
-              {currentStep.actionType === "arrive" ? "Stop Ahead" : "Next"}
-            </p>
-            <p className="text-lg font-semibold text-white leading-snug">
-              {currentStep.instruction}
-            </p>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className={`text-xs uppercase tracking-wide mb-1 ${currentStep.actionType === "arrive" ? "text-violet-200" : "text-blue-200"}`}>
+                  {currentStep.actionType === "arrive" ? "Stop Ahead" : "Next"}
+                </p>
+                <p className="text-lg font-semibold text-white leading-snug">
+                  {currentStep.instruction}
+                </p>
+              </div>
+              <button
+                onClick={() => setReportModalOpen(true)}
+                title="Report Route Problem"
+                className="shrink-0 flex items-center gap-1 bg-black/20 hover:bg-black/30 text-white/90 text-[11px] uppercase tracking-wide px-2 py-1.5 rounded-md"
+              >
+                <Flag size={12} /> Report
+              </button>
+            </div>
           </div>
         )}
 {routeResult && !isNavigating && (
@@ -1204,6 +1357,13 @@ export default function RouteMapPage() {
                   </button>
                 )}
                 <button
+                  onClick={() => setReportModalOpen(true)}
+                  className="flex items-center gap-1.5 text-gray-400 hover:text-red-400 text-xs font-medium uppercase tracking-wide"
+                >
+                  <Flag size={14} />
+                  Report Problem
+                </button>
+                <button
                   onClick={startNavigation}
                   className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold uppercase tracking-wide px-3 py-2 rounded-md"
                 >
@@ -1212,6 +1372,14 @@ export default function RouteMapPage() {
                 </button>
               </div>
             </div>
+            <p className="flex items-start gap-1.5 text-[11px] text-gray-600 px-4 pb-3">
+              <ShieldAlert size={13} className="mt-0.5 shrink-0" />
+              <span>
+                Commercial Truck Route: Routing considers available vehicle dimensions and known
+                commercial restrictions. Always obey posted road signs, temporary restrictions,
+                construction controls, and law-enforcement instructions.
+              </span>
+            </p>
             {showDirections && routeResult.actions && (
               <div className="border-t border-slate-800 max-h-80 overflow-y-auto">
                 {routeResult.actions.map((step, i) => (
@@ -1355,6 +1523,93 @@ export default function RouteMapPage() {
         </div>
         {!mapsReady && <p className="text-gray-500 text-xs mt-2">Loading map...</p>}
       </div>
+      {reportModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-lg w-full max-w-md p-5 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Flag size={16} className="text-red-400" />
+                <h2 className="text-white font-semibold">Report Route Problem</h2>
+              </div>
+              <button
+                onClick={closeReportModal}
+                className="text-gray-500 hover:text-gray-300"
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            {reportSuccess ? (
+              <div className="text-center py-4">
+                <p className="text-green-400 text-sm font-medium mb-1">Report submitted — thanks.</p>
+                <p className="text-gray-500 text-xs mb-4">
+                  This doesn&apos;t change routing automatically; our team reviews every report.
+                </p>
+                <button
+                  onClick={closeReportModal}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-md"
+                >
+                  Close
+                </button>
+              </div>
+            ) : (
+              <>
+                {reportError && (
+                  <div className="bg-red-950/40 border border-red-800 text-red-300 text-sm rounded-md p-3 mb-3">
+                    {reportError}
+                  </div>
+                )}
+                <div className="mb-3">
+                  <label className="block text-xs font-medium text-gray-400 mb-1">Category</label>
+                  <select
+                    value={reportCategory}
+                    onChange={(e) => setReportCategory(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-white"
+                  >
+                    {ROUTE_PROBLEM_CATEGORIES.map((c) => (
+                      <option key={c.value} value={c.value}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mb-3">
+                  <label className="block text-xs font-medium text-gray-400 mb-1">
+                    What happened? (optional)
+                  </label>
+                  <textarea
+                    value={reportDescription}
+                    onChange={(e) => setReportDescription(e.target.value)}
+                    rows={3}
+                    placeholder="e.g. Bridge posted 12'6&quot;, my rig is 13'6&quot;"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-white placeholder-gray-600"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-1 cursor-pointer w-fit">
+                    <Camera size={14} />
+                    {reportPhotoFile ? reportPhotoFile.name : "Add a photo (optional)"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => setReportPhotoFile(e.target.files?.[0] || null)}
+                    />
+                  </label>
+                </div>
+                <button
+                  onClick={submitRouteReport}
+                  disabled={reportSubmitting}
+                  className="w-full flex items-center justify-center gap-1.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-semibold py-2.5 rounded-md"
+                >
+                  {reportSubmitting && <Loader2 size={14} className="animate-spin" />}
+                  {reportSubmitting ? "Submitting..." : "Submit Report"}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
