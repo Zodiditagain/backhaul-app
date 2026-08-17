@@ -16,6 +16,75 @@ function haversineMeters(lat1, lng1, lat2, lng2) {
 // Cap on how many stops can be inserted between origin and destination.
 const MAX_WAYPOINTS = 6;
 
+const INCHES_TO_CM = 2.54;
+const LBS_TO_KG = 0.453592;
+
+// Builds the HERE v8 vehicle[...] / avoid[...] query params from a saved
+// truck profile. Parameter names and units (centimeters, kilograms) are
+// taken directly from HERE's live v8 API reference — HERE silently drops
+// any query param it doesn't recognize instead of erroring, so getting
+// these exact names right is the whole ballgame; a typo here just quietly
+// routes the truck like a car with no dimensions on file.
+function applyTruckProfile(url, profile) {
+  if (!profile) return { appliedFields: [] };
+  const appliedFields = [];
+
+  const setCm = (paramKey, inches) => {
+    if (!inches || Number(inches) <= 0) return;
+    url.searchParams.set(`vehicle[${paramKey}]`, String(Math.round(Number(inches) * INCHES_TO_CM)));
+    appliedFields.push(paramKey);
+  };
+  const setKg = (paramKey, lbs) => {
+    if (!lbs || Number(lbs) <= 0) return;
+    url.searchParams.set(`vehicle[${paramKey}]`, String(Math.round(Number(lbs) * LBS_TO_KG)));
+    appliedFields.push(paramKey);
+  };
+
+  setCm("height", profile.height_inches);
+  setCm("width", profile.width_inches);
+  setCm("length", profile.length_inches);
+  setKg("currentWeight", profile.current_weight_lbs);
+  setKg("grossWeight", profile.gross_weight_lbs);
+  setKg("weightPerAxle", profile.weight_per_axle_lbs);
+
+  if (profile.axle_count && Number(profile.axle_count) > 0) {
+    url.searchParams.set("vehicle[axleCount]", String(Math.round(Number(profile.axle_count))));
+    appliedFields.push("axleCount");
+  }
+
+  // HERE distinguishes solo trucks from tractor-trailer combinations via
+  // trailerCount — infer 1 for a tractor-trailer profile, 0 otherwise,
+  // since we don't collect a separate "number of trailers" field.
+  const trailerCount = profile.vehicle_type === "tractor_trailer" ? 1 : 0;
+  url.searchParams.set("vehicle[trailerCount]", String(trailerCount));
+  appliedFields.push("trailerCount");
+
+  if (profile.hazmat && Array.isArray(profile.hazmat_categories) && profile.hazmat_categories.length > 0) {
+    url.searchParams.set("vehicle[shippedHazardousGoods]", profile.hazmat_categories.join(","));
+    appliedFields.push("shippedHazardousGoods");
+  }
+
+  if (profile.tunnel_category) {
+    url.searchParams.set("vehicle[tunnelCategory]", profile.tunnel_category);
+    appliedFields.push("tunnelCategory");
+  }
+
+  const avoidFeatures = [];
+  if (profile.avoid_tolls) avoidFeatures.push("tollRoad");
+  if (profile.avoid_ferries) avoidFeatures.push("ferry");
+  if (avoidFeatures.length > 0) {
+    url.searchParams.set("avoid[features]", avoidFeatures.join(","));
+    appliedFields.push("avoidFeatures");
+  }
+
+  // Note: HERE v8 has no direct "prefer major highways" avoid/routing
+  // parameter today. prefer_highways is stored on the profile for display
+  // and for future use if HERE adds support, but it isn't sent on the
+  // request yet.
+
+  return { appliedFields };
+}
+
 export async function POST(req) {
   const apiKey = process.env.HERE_API_KEY;
   if (!apiKey) {
@@ -23,7 +92,7 @@ export async function POST(req) {
   }
 
   const body = await req.json();
-  const { origin, destination, truckSpecs } = body;
+  const { origin, destination, truckProfile } = body;
   const waypoints = Array.isArray(body.waypoints)
     ? body.waypoints
         .filter((wp) => typeof wp?.lat === "number" && typeof wp?.lng === "number")
@@ -53,23 +122,7 @@ export async function POST(req) {
   url.searchParams.set("units", "imperial");
   url.searchParams.set("apiKey", apiKey);
 
-  if (truckSpecs) {
-    const heightCm = truckSpecs.truck_height_inches
-      ? Math.round(truckSpecs.truck_height_inches * 2.54)
-      : null;
-    const weightKg = truckSpecs.truck_weight_lbs
-      ? Math.round(truckSpecs.truck_weight_lbs * 0.453592)
-      : null;
-    const lengthCm = truckSpecs.truck_length_feet
-      ? Math.round(truckSpecs.truck_length_feet * 30.48)
-      : null;
-    const axleCount = truckSpecs.truck_axle_count || null;
-
-    if (heightCm) url.searchParams.set("truck[height]", String(heightCm));
-    if (weightKg) url.searchParams.set("truck[grossWeight]", String(weightKg));
-    if (lengthCm) url.searchParams.set("truck[length]", String(lengthCm));
-    if (axleCount) url.searchParams.set("truck[axleCount]", String(axleCount));
-  }
+  const { appliedFields } = applyTruckProfile(url, truckProfile);
 
   try {
     const res = await fetch(url.toString());
@@ -169,7 +222,7 @@ export async function POST(req) {
       actions: allActions,
       stopOffsets,
       waypoints,
-      usedTruckRestrictions: !!truckSpecs,
+      usedTruckProfileFields: appliedFields,
       notices,
     });
   } catch (err) {
