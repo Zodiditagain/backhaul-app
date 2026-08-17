@@ -92,7 +92,7 @@ export default function AdminRouteReportsPage() {
     setError("");
     const headers = { ...(await authHeaders()), "Content-Type": "application/json" };
     const draft = drafts[id] || {};
-    const res = await fetch(`/api/admin/route-reports/${id}`, {
+    const res = await fetch("/api/admin/route-reports/" + id, {
       method: "PATCH",
       headers,
       body: JSON.stringify({ status: draft.status, admin_notes: draft.admin_notes }),
@@ -203,9 +203,10 @@ export default function AdminRouteReportsPage() {
                     {CATEGORY_LABELS[r.category] || r.category}
                   </span>
                   <span
-                    className={`text-[10px] font-mono uppercase tracking-wide border rounded-sm px-2 py-0.5 ${
-                      STATUS_COLORS[r.status] || STATUS_COLORS.new
-                    }`}
+                    className={
+                      "text-[10px] font-mono uppercase tracking-wide border rounded-sm px-2 py-0.5 " +
+                      (STATUS_COLORS[r.status] || STATUS_COLORS.new)
+                    }
                   >
                     {statusLabel(r.status)}
                   </span>
@@ -219,7 +220,7 @@ export default function AdminRouteReportsPage() {
                 <p>
                   <span className="text-gray-400">Driver: </span>
                   {r.reporter?.company_name || "Unknown"}
-                  {r.reporter?.role ? ` (${r.reporter.role})` : ""}
+                  {r.reporter?.role ? " (" + r.reporter.role + ")" : ""}
                 </p>
                 <p>
                   <span className="text-gray-400">Truck Profile: </span>
@@ -233,7 +234,7 @@ export default function AdminRouteReportsPage() {
                   <span className="text-gray-400">Location: </span>
                   {r.lat && r.lng ? (
                     
-                      href={`https://www.google.com/maps?q=${r.lat},${r.lng}`}
+                      href={"https://www.google.com/maps?q=" + r.lat + "," + r.lng}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-blue-600 underline flex items-center gap-0.5"
