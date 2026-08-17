@@ -249,14 +249,13 @@ export default function AdminRouteReportsPage() {
               )}
 
               {r.photo_url && (
-                
-                  href={r.photo_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
+                  onClick={() => window.open(r.photo_url, "_blank", "noopener,noreferrer")}
                   className="inline-flex items-center gap-1 text-xs text-blue-600 underline"
                 >
                   <ExternalLink size={12} /> View submitted photo
-                </a>
+                </button>
               )}
 
               <div className="flex flex-wrap items-end gap-3 pt-2 border-t border-gray-100">
