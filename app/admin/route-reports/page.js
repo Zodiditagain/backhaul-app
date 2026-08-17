@@ -234,7 +234,7 @@ export default function AdminRouteReportsPage() {
                   <span className="text-gray-400">Location: </span>
                   {r.lat && r.lng ? (
                     
-                      href={"https://www.google.com/maps?q=" + r.lat + "," + r.lng}
+                      href={"https:" + "//www.google.com/maps?q=" + r.lat + "," + r.lng}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-blue-600 underline flex items-center gap-0.5"
