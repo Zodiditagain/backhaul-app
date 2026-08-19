@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Shield, CheckCircle2, XCircle, Clock, Globe, RotateCcw } from "lucide-react";
+import { ArrowLeft, Shield, CheckCircle2, XCircle, Clock, Globe, RotateCcw, Upload } from "lucide-react";
 import { supabase, authHeaders } from "../../../lib/supabaseClient";
 import BlogStatHeader from "../../../components/BlogStatHeader";
 
@@ -38,6 +38,10 @@ export default function AdminBlogPage() {
   const [drafts, setDrafts] = useState({});
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState("");
+  const [importText, setImportText] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [importSuccess, setImportSuccess] = useState("");
 
   async function loadPosts() {
     const headers = await authHeaders();
@@ -87,6 +91,36 @@ export default function AdminBlogPage() {
 
   function updateDraft(id, field, value) {
     setDrafts((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
+  }
+
+  async function submitImport() {
+    setImportBusy(true);
+    setImportError("");
+    setImportSuccess("");
+    let payload;
+    try {
+      payload = JSON.parse(importText);
+    } catch (e) {
+      setImportError("That's not valid JSON. Paste the exact block from the Marketing AI's report.");
+      setImportBusy(false);
+      return;
+    }
+    const headers = { ...(await authHeaders()), "Content-Type": "application/json" };
+    const res = await fetch("/api/admin/blog/import", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setImportError(json.error || "Import failed. Check the JSON and try again.");
+      setImportBusy(false);
+      return;
+    }
+    setImportSuccess("Imported as a pending draft. Scroll down to review it.");
+    setImportText("");
+    await loadPosts();
+    setImportBusy(false);
   }
 
   function updateStat(id, field, value) {
@@ -152,6 +186,42 @@ export default function AdminBlogPage() {
           goes live on its own <strong>48 hours</strong> after it was drafted — edit it, publish it
           immediately, or reject it any time before then. Already live and want it down? Use
           Unpublish.
+        </div>
+
+        <div className="bg-white border border-gray-300 rounded-sm p-4 space-y-2">
+          <p className="text-[11px] uppercase tracking-wide font-mono text-gray-400 flex items-center gap-1.5">
+            <Upload size={13} /> Import Marketing AI Draft
+          </p>
+          <p className="text-xs text-steelgray">
+            The Marketing AI can&apos;t reach this site directly from its own environment, so it
+            prints the finished draft as a JSON block in its weekly report instead. Paste that
+            block here and submit it — it lands as a pending draft below, same as if it had
+            submitted itself.
+          </p>
+          <textarea
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+            placeholder='{"title": "...", "excerpt": "...", "content": "...", "sources": "...", "headline_stat": {...}}'
+            rows={4}
+            className="w-full border border-gray-300 rounded-sm px-3 py-2 text-xs font-mono"
+          />
+          {importError && (
+            <div className="bg-red-50 border border-red-300 text-red-700 text-xs rounded-sm p-2">
+              {importError}
+            </div>
+          )}
+          {importSuccess && (
+            <div className="bg-green-50 border border-green-300 text-green-700 text-xs rounded-sm p-2">
+              {importSuccess}
+            </div>
+          )}
+          <button
+            onClick={submitImport}
+            disabled={importBusy || !importText.trim()}
+            className="text-xs font-mono uppercase tracking-wide px-3 py-1.5 rounded-sm bg-asphalt text-white hover:bg-black disabled:opacity-50"
+          >
+            {importBusy ? "Importing..." : "Import Draft"}
+          </button>
         </div>
 
         {error && (
