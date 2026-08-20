@@ -8,6 +8,12 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// RECRUITING_FROM_EMAIL is just a branded "from" address on the verified
+// domain — it doesn't need a real inbox behind it. Replies still need
+// somewhere to land, so every send sets this as the reply-to address
+// instead, routing responses/opt-outs to an inbox that's actually checked.
+const RECRUITING_REPLY_TO = "lorenzomorgan6969@gmail.com";
+
 // The only place an actual email ever goes out for the recruiting feature.
 // Everything upstream of this (drafting, review, editing) is just a queue —
 // nothing is sent until an admin clicks Send here, from their own logged-in
@@ -65,6 +71,7 @@ export async function POST(req, { params }) {
     to: lead.contact_email,
     subject: lead.email_subject,
     text: fullBody,
+    replyTo: RECRUITING_REPLY_TO,
   });
 
   if (sendError) {
