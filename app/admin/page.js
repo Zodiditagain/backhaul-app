@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Shield, Users, FileText, Handshake, ArrowLeft, ShieldCheck, ShieldOff, MessageSquare, Camera, Ban, CheckCircle2, Activity, KeyRound, Bell } from "lucide-react";
+import { Shield, Users, FileText, Handshake, ArrowLeft, ShieldCheck, ShieldOff, MessageSquare, Camera, Ban, CheckCircle2, Activity, KeyRound, Bell, Mail, Flag } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 
 const STATUS_LABELS = {
@@ -313,6 +313,18 @@ export default function AdminPage() {
               className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
             >
               <FileText size={14} /> Blog Review
+            </Link>
+            <Link
+              href="/admin/recruiting"
+              className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
+            >
+              <Mail size={14} /> Recruiting
+            </Link>
+            <Link
+              href="/admin/route-reports"
+              className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
+            >
+              <Flag size={14} /> Route Reports
             </Link>
             <Link
               href="/dashboard"
