@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Truck, LogOut, Settings, Shield, Calculator, Map, Activity, Newspaper, ShieldCheck } from "lucide-react";
+import { Truck, LogOut, Settings, Shield, Calculator, Map, Activity, Newspaper, ShieldCheck, Search, Star, Bell } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import TruckerDashboard from "../../components/TruckerDashboard";
 import MatchmakingDashboard from "../../components/MatchmakingDashboard";
@@ -116,7 +116,7 @@ export default function Dashboard() {
                 <Activity size={14} /> Market Pulse
               </Link>
             )}
-            {isTrucker && (
+            {(isTrucker || isPartner) && (
               <Link
                 href="/business-tools"
                 className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
@@ -130,6 +130,30 @@ export default function Dashboard() {
                 className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
               >
                 <Truck size={14} /> Available Trucks
+              </Link>
+            )}
+            {isPartner && (
+              <Link
+                href="/broker/search-carriers"
+                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
+              >
+                <Search size={14} /> Search Carriers
+              </Link>
+            )}
+            {isPartner && (
+              <Link
+                href="/broker/saved-carriers"
+                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
+              >
+                <Star size={14} /> Saved Carriers
+              </Link>
+            )}
+            {isPartner && (
+              <Link
+                href="/broker/capacity-alerts"
+                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
+              >
+                <Bell size={14} /> Capacity Alerts
               </Link>
             )}
             {isPartner && (
