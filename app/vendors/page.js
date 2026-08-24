@@ -58,6 +58,25 @@ export default function VendorDirectoryPage() {
       router.push("/login");
       return;
     }
+    // Truckers browse the vendor directory for free. Brokers and vendors get
+    // it as part of the paid Partner Pro bundle, so they need an active or
+    // trialing subscription to get past this page.
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+    if (profile?.role === "broker" || profile?.role === "vendor") {
+      const { data: sub } = await supabase
+        .from("subscriptions")
+        .select("status")
+        .eq("user_id", user.id)
+        .eq("product", "partner_pro")
+        .in("status", ["trialing", "active"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!sub) {
+        router.push("/partner-pro/subscribe");
+        return;
+      }
+    }
     setCheckingAccess(false);
   }
 
