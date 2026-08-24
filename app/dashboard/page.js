@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Truck, LogOut, Settings, Shield, Calculator, Map, Activity, Newspaper, ShieldCheck, Search, Star, Bell, BarChart3, Gift, LifeBuoy } from "lucide-react";
+import { Truck, LogOut, Settings, Shield, Calculator, Map, Activity, Newspaper, ShieldCheck, Search, Star, Bell, BarChart3, Gift, LifeBuoy, Store } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import TruckerDashboard from "../../components/TruckerDashboard";
 import MatchmakingDashboard from "../../components/MatchmakingDashboard";
@@ -77,6 +77,7 @@ export default function Dashboard() {
   if (!profile) return <div className="p-8 text-alertred">Couldn't load your profile. Try logging in again.</div>;
   const isPartner = profile.role === "broker" || profile.role === "vendor";
   const isTrucker = profile.role === "trucker";
+  const isVendor = profile.role === "vendor";
   return (
     <div className="min-h-screen">
       <header className="bg-asphalt border-b-4 border-amberx">
@@ -122,6 +123,14 @@ export default function Dashboard() {
                 className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
               >
                 <Calculator size={14} /> Business Tools
+              </Link>
+            )}
+            {(isTrucker || isPartner) && (
+              <Link
+                href="/vendors"
+                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
+              >
+                <Store size={14} /> Vendor Directory
               </Link>
             )}
             {isPartner && (
@@ -170,6 +179,14 @@ export default function Dashboard() {
                 className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
               >
                 <Gift size={14} /> Referrals
+              </Link>
+            )}
+            {isVendor && (
+              <Link
+                href="/vendor-profile"
+                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
+              >
+                <Store size={14} /> Vendor Profile
               </Link>
             )}
             {isPartner && (
