@@ -2,8 +2,16 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Star, Truck, MessageCircle, BadgeCheck } from "lucide-react";
+import { ArrowLeft, Star, Truck, MessageCircle, BadgeCheck, ShieldAlert } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
+
+const NEW_CARRIER_WINDOW_DAYS = 14;
+
+function isNewCarrier(createdAt) {
+  if (!createdAt) return false;
+  const daysAgo = (Date.now() - new Date(createdAt).getTime()) / 864e5;
+  return daysAgo < NEW_CARRIER_WINDOW_DAYS;
+}
 
 const EQUIPMENT_OPTIONS = [
   { id: "dry_van", label: "Dry Van" },
@@ -23,6 +31,7 @@ export default function SavedCarriersPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
+  const [completedTruckerIds, setCompletedTruckerIds] = useState(new Set());
 
   useEffect(() => {
     checkAccess();
@@ -53,7 +62,7 @@ export default function SavedCarriersPage() {
     const { data } = await supabase
       .from("saved_carriers")
       .select(
-        "id, trucker_id, created_at, trucker:profiles!saved_carriers_trucker_id_fkey(id, company_name, equipment_types, fleet_size, dot_number, available_now, city, state)"
+        "id, trucker_id, created_at, trucker:profiles!saved_carriers_trucker_id_fkey(id, company_name, equipment_types, fleet_size, dot_number, available_now, city, state, created_at)"
       )
       .eq("partner_id", userId)
       .order("created_at", { ascending: false });
@@ -61,9 +70,22 @@ export default function SavedCarriersPage() {
     setLoading(false);
   }, [userId]);
 
+  // "No completed loads yet" is scoped to loads completed WITH this broker —
+  // not a global reputation signal — so it never requires visibility into
+  // another broker's history.
+  const loadCompletedHistory = useCallback(async () => {
+    if (!userId) return;
+    const { data } = await supabase.from("bols").select("trucker_id").eq("broker_id", userId).eq("status", "completed");
+    setCompletedTruckerIds(new Set((data || []).map((r) => r.trucker_id)));
+  }, [userId]);
+
   useEffect(() => {
     loadSaved();
   }, [loadSaved]);
+
+  useEffect(() => {
+    loadCompletedHistory();
+  }, [loadCompletedHistory]);
 
   async function unsave(truckerId) {
     setBusyId(truckerId);
@@ -167,6 +189,23 @@ export default function SavedCarriersPage() {
                       <p className="text-[11px] text-gray-500 flex items-center gap-1 mt-0.5">
                         <BadgeCheck size={10} /> {t.dot_number ? "DOT on file: " + t.dot_number : "No DOT on file"}
                       </p>
+                      <div className="flex flex-wrap items-center gap-1 mt-1">
+                        {isNewCarrier(t.created_at) && (
+                          <span className="text-[9px] uppercase tracking-wide text-blue-400 bg-blue-500/10 border border-blue-500/30 rounded px-1.5 py-0.5">
+                            New Carrier
+                          </span>
+                        )}
+                        {!t.dot_number && (
+                          <span className="flex items-center gap-1 text-[9px] uppercase tracking-wide text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5">
+                            <ShieldAlert size={9} /> Unverified
+                          </span>
+                        )}
+                        {!completedTruckerIds.has(t.id) && (
+                          <span className="text-[9px] uppercase tracking-wide text-gray-500 bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5">
+                            No completed loads with you yet
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </Link>
                   <div className="flex items-center gap-1.5 shrink-0">
