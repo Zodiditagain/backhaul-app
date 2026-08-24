@@ -81,6 +81,7 @@ export default function MatchThread({ match, user, role, onReviewSubmitted, onMe
   const [showBolForm, setShowBolForm] = useState(false);
   const [editingBol, setEditingBol] = useState(null);
   const [viewingBol, setViewingBol] = useState(null);
+  const [avgRate, setAvgRate] = useState(null);
 
   async function loadMessages() {
     const { data } = await supabase
@@ -110,10 +111,33 @@ export default function MatchThread({ match, user, role, onReviewSubmitted, onMe
     setBols(data || []);
   }
 
+  // A quick, no-AI benchmark: this broker's own average $/mi across loads
+  // they've completed (not a global market figure, so it never needs
+  // visibility into another broker's rates).
+  async function loadAvgRate() {
+    if (role !== "broker") {
+      setAvgRate(null);
+      return;
+    }
+    const { data } = await supabase
+      .from("bols")
+      .select("rate_per_mile")
+      .eq("broker_id", user.id)
+      .eq("status", "completed")
+      .not("rate_per_mile", "is", null);
+    if (!data || data.length === 0) {
+      setAvgRate(null);
+      return;
+    }
+    const sum = data.reduce((acc, b) => acc + Number(b.rate_per_mile), 0);
+    setAvgRate(sum / data.length);
+  }
+
   useEffect(() => {
     loadMessages();
     loadTruckerDetails();
     loadBols();
+    loadAvgRate();
     setSubmitted(false);
     setShowReview(false);
     setShowBolForm(false);
@@ -341,6 +365,11 @@ export default function MatchThread({ match, user, role, onReviewSubmitted, onMe
           </div>
         ))}
       </div>
+      {isBroker && avgRate != null && (
+        <div className="px-3 pt-2 text-[11px] text-gray-400">
+          Your average completed rate: <span className="font-semibold text-steelgray">${avgRate.toFixed(2)}/mi</span>
+        </div>
+      )}
       <div className="border-t border-gray-300 p-3 flex items-center gap-2">
         <input value={rate} onChange={(e) => setRate(e.target.value)} placeholder="$/mi" className="w-20 border border-gray-300 rounded-sm px-2 py-2 text-sm" />
         <input
