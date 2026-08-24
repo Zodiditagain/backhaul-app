@@ -2,10 +2,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Truck, MapPin, Clock, Loader2, Crosshair, Star, MessageCircle, Bell, BadgeCheck } from "lucide-react";
+import { ArrowLeft, Truck, MapPin, Clock, Loader2, Crosshair, Star, MessageCircle, Bell, BadgeCheck, ShieldAlert } from "lucide-react";
 import { supabase, authHeaders } from "../../../lib/supabaseClient";
 
 const AVAILABILITY_WINDOW_HOURS = 6;
+const NEW_CARRIER_WINDOW_DAYS = 14;
 
 const EQUIPMENT_OPTIONS = [
   { id: "dry_van", label: "Dry Van" },
@@ -35,6 +36,12 @@ function isActive(availableNow, availableSince) {
   return hoursAgo < AVAILABILITY_WINDOW_HOURS;
 }
 
+function isNewCarrier(createdAt) {
+  if (!createdAt) return false;
+  const daysAgo = (Date.now() - new Date(createdAt).getTime()) / 864e5;
+  return daysAgo < NEW_CARRIER_WINDOW_DAYS;
+}
+
 export default function SearchCarriersPage() {
   const router = useRouter();
   const [checkingAccess, setCheckingAccess] = useState(true);
@@ -45,6 +52,7 @@ export default function SearchCarriersPage() {
   const [loadingTruckers, setLoadingTruckers] = useState(true);
   const [savedIds, setSavedIds] = useState(new Set());
   const [busyId, setBusyId] = useState(null);
+  const [completedTruckerIds, setCompletedTruckerIds] = useState(new Set());
 
   const [equipmentFilter, setEquipmentFilter] = useState(null);
   const [availableOnly, setAvailableOnly] = useState(true);
@@ -88,7 +96,7 @@ export default function SearchCarriersPage() {
     const { data } = await supabase
       .from("profiles")
       .select(
-        "id, company_name, equipment_types, fleet_size, dot_number, available_now, available_since, available_lat, available_lng, available_location_label, city, state"
+        "id, company_name, equipment_types, fleet_size, dot_number, available_now, available_since, available_lat, available_lng, available_location_label, city, state, created_at"
       )
       .eq("role", "trucker");
     setTruckers(data || []);
@@ -101,6 +109,15 @@ export default function SearchCarriersPage() {
     setSavedIds(new Set((data || []).map((r) => r.trucker_id)));
   }, [userId]);
 
+  // "No completed loads yet" is scoped to loads completed WITH this broker —
+  // not a global reputation signal — so it never requires visibility into
+  // another broker's history.
+  const loadCompletedHistory = useCallback(async () => {
+    if (!userId) return;
+    const { data } = await supabase.from("bols").select("trucker_id").eq("broker_id", userId).eq("status", "completed");
+    setCompletedTruckerIds(new Set((data || []).map((r) => r.trucker_id)));
+  }, [userId]);
+
   useEffect(() => {
     if (checkingAccess) return;
     loadTruckers();
@@ -111,6 +128,10 @@ export default function SearchCarriersPage() {
   useEffect(() => {
     loadSaved();
   }, [loadSaved]);
+
+  useEffect(() => {
+    loadCompletedHistory();
+  }, [loadCompletedHistory]);
 
   const fetchSuggestions = useCallback(async (q) => {
     if (q.trim().length < 3) {
@@ -223,6 +244,9 @@ export default function SearchCarriersPage() {
     .map((t) => ({
       ...t,
       isCurrentlyAvailable: isActive(t.available_now, t.available_since),
+      isNew: isNewCarrier(t.created_at),
+      isUnverified: !t.dot_number,
+      hasNoCompletedLoadsWithYou: !completedTruckerIds.has(t.id),
       distanceMiles:
         searchPoint && t.available_lat != null && t.available_lng != null
           ? haversineMiles(searchPoint.lat, searchPoint.lng, t.available_lat, t.available_lng)
@@ -431,6 +455,23 @@ export default function SearchCarriersPage() {
                     <p className="text-[11px] text-gray-500 flex items-center gap-1 mt-0.5">
                       <BadgeCheck size={10} /> {t.dot_number ? "DOT on file: " + t.dot_number : "No DOT on file"}
                     </p>
+                    <div className="flex flex-wrap items-center gap-1 mt-1">
+                      {t.isNew && (
+                        <span className="text-[9px] uppercase tracking-wide text-blue-400 bg-blue-500/10 border border-blue-500/30 rounded px-1.5 py-0.5">
+                          New Carrier
+                        </span>
+                      )}
+                      {t.isUnverified && (
+                        <span className="flex items-center gap-1 text-[9px] uppercase tracking-wide text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-1.5 py-0.5">
+                          <ShieldAlert size={9} /> Unverified
+                        </span>
+                      )}
+                      {t.hasNoCompletedLoadsWithYou && (
+                        <span className="text-[9px] uppercase tracking-wide text-gray-500 bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5">
+                          No completed loads with you yet
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </Link>
                 <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
