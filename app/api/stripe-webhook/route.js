@@ -15,10 +15,12 @@ function planFromPriceId(priceId) {
   const knownPriceIds = [
     process.env.STRIPE_ROUTE_MAP_MONTHLY_PRICE_ID,
     process.env.STRIPE_MARKET_PULSE_MONTHLY_PRICE_ID,
+    process.env.STRIPE_PARTNER_PRO_MONTHLY_PRICE_ID,
   ];
   const knownYearlyPriceIds = [
     process.env.STRIPE_ROUTE_MAP_YEARLY_PRICE_ID,
     process.env.STRIPE_MARKET_PULSE_YEARLY_PRICE_ID,
+    process.env.STRIPE_PARTNER_PRO_YEARLY_PRICE_ID,
   ];
   if (knownPriceIds.includes(priceId)) return "monthly";
   if (knownYearlyPriceIds.includes(priceId)) return "yearly";
