@@ -2,8 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Truck } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
+
+// Only treated as a valid referral if it's actually shaped like a UUID —
+// a malformed or missing ?ref= value is silently ignored rather than being
+// sent to the database, where a non-UUID string would fail the insert and
+// break signup entirely for anyone who followed a bad link.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const VENDOR_CATEGORIES = [
   { id: "factoring", label: "Factoring Company" },
@@ -77,6 +84,10 @@ const STATES = [
 ];
 
 export default function Signup() {
+  const searchParams = useSearchParams();
+  const refParam = searchParams.get("ref");
+  const referredBy = refParam && UUID_RE.test(refParam) ? refParam : null;
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -152,7 +163,7 @@ export default function Signup() {
     if (role !== "vendor") {
       const { error: profileError } = await supabase
         .from("profiles")
-        .insert({ id: data.user.id, role, company_name: companyName });
+        .insert({ id: data.user.id, role, company_name: companyName, referred_by: referredBy });
       if (profileError) {
         setError(profileError.message);
         setLoading(false);
@@ -170,6 +181,7 @@ export default function Signup() {
       company_name: companyName,
       phone,
       website: website || null,
+      referred_by: referredBy,
     });
     if (profileError) {
       setError(profileError.message);
