@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Truck, LogOut, Settings, Shield, Calculator, Map, Activity, Newspaper, ShieldCheck, Search, Star, Bell } from "lucide-react";
+import { Truck, LogOut, Settings, Shield, Calculator, Map, Activity, Newspaper, ShieldCheck, Search, Star, Bell, BarChart3, Gift, LifeBuoy } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import TruckerDashboard from "../../components/TruckerDashboard";
 import MatchmakingDashboard from "../../components/MatchmakingDashboard";
@@ -158,12 +158,34 @@ export default function Dashboard() {
             )}
             {isPartner && (
               <Link
+                href="/broker/analytics"
+                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
+              >
+                <BarChart3 size={14} /> Analytics
+              </Link>
+            )}
+            {isPartner && (
+              <Link
+                href="/broker/referrals"
+                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
+              >
+                <Gift size={14} /> Referrals
+              </Link>
+            )}
+            {isPartner && (
+              <Link
                 href="/onboarding-partner"
                 className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
               >
                 <Settings size={14} /> Edit Profile
               </Link>
             )}
+            <Link
+              href="/support"
+              className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
+            >
+              <LifeBuoy size={14} /> Support
+            </Link>
             <Link
               href="/blog"
               className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
