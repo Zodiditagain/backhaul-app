@@ -54,6 +54,19 @@ export default function CapacityAlertsPage() {
       router.push("/dashboard");
       return;
     }
+    const { data: sub } = await supabase
+      .from("subscriptions")
+      .select("status")
+      .eq("user_id", user.id)
+      .eq("product", "partner_pro")
+      .in("status", ["trialing", "active"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!sub) {
+      router.push("/partner-pro/subscribe");
+      return;
+    }
     setUserId(user.id);
     setCheckingAccess(false);
   }
