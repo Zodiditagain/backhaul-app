@@ -84,6 +84,19 @@ export default function AvailableTrucksPage() {
       router.push("/dashboard");
       return;
     }
+    const { data: sub } = await supabase
+      .from("subscriptions")
+      .select("status")
+      .eq("user_id", user.id)
+      .eq("product", "partner_pro")
+      .in("status", ["trialing", "active"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!sub) {
+      router.push("/partner-pro/subscribe");
+      return;
+    }
     setHasAccess(true);
     setCheckingAccess(false);
   }
@@ -197,7 +210,7 @@ export default function AvailableTrucksPage() {
         <p className="text-xs text-gray-500 mb-6 max-w-2xl">
           Truckers who've marked themselves available for a backhaul in the last{" "}
           {AVAILABILITY_WINDOW_HOURS} hours. Postings expire automatically so this list stays
-          current — free for everyone, no subscription required.
+          current.
         </p>
 
         <div className="flex flex-wrap items-center gap-2 mb-4">
