@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Truck } from "lucide-react";
@@ -84,6 +84,19 @@ const STATES = [
 ];
 
 export default function Signup() {
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
+  );
+}
+
+// useSearchParams() only works inside a Suspense boundary during Next's
+// static prerendering — without this split, `npx next build` fails on
+// Vercel with "useSearchParams() should be wrapped in a suspense boundary"
+// even though it builds fine locally if an unrelated route error aborts
+// the build before static generation gets this far.
+function SignupForm() {
   const searchParams = useSearchParams();
   const refParam = searchParams.get("ref");
   const referredBy = refParam && UUID_RE.test(refParam) ? refParam : null;
