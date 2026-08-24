@@ -7,6 +7,7 @@ import { supabase } from "../../lib/supabaseClient";
 import TruckerDashboard from "../../components/TruckerDashboard";
 import MatchmakingDashboard from "../../components/MatchmakingDashboard";
 import NotificationBell from "../../components/NotificationBell";
+import WelcomeModal from "../../components/WelcomeModal";
 export default function Dashboard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -14,6 +15,7 @@ export default function Dashboard() {
   const [profile, setProfile] = useState(null);
   const [latestPost, setLatestPost] = useState(null);
   const [tipOfDay, setTipOfDay] = useState(null);
+  const [showWelcome, setShowWelcome] = useState(false);
   useEffect(() => {
     async function load() {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -32,6 +34,13 @@ export default function Dashboard() {
         console.error(error);
       } else {
         setProfile(profileData);
+        // One-time "what you get for $199/month" modal for broker/vendor
+        // accounts — welcome_seen flips true the first time they dismiss it,
+        // so it never shows again on later logins.
+        const isPartnerAccount = profileData?.role === "broker" || profileData?.role === "vendor";
+        if (isPartnerAccount && !profileData?.welcome_seen) {
+          setShowWelcome(true);
+        }
       }
       // Safety Tip of the Day: a fixed, pre-written library (not AI-generated
       // day to day — see safety_tips table) rotated deterministically by
@@ -72,6 +81,12 @@ export default function Dashboard() {
   async function handleLogout() {
     await supabase.auth.signOut();
     router.replace("/login");
+  }
+  async function handleCloseWelcome() {
+    setShowWelcome(false);
+    if (user) {
+      await supabase.from("profiles").update({ welcome_seen: true }).eq("id", user.id);
+    }
   }
   if (loading) return <div className="p-8 text-steelgray">Loading...</div>;
   if (!profile) return <div className="p-8 text-alertred">Couldn't load your profile. Try logging in again.</div>;
@@ -287,6 +302,7 @@ export default function Dashboard() {
           Terms of Service
         </Link>
       </footer>
+      {showWelcome && <WelcomeModal onClose={handleCloseWelcome} />}
     </div>
   );
 }
