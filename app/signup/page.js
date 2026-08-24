@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Truck } from "lucide-react";
+import { Truck, Search, Star, Bell, BarChart3, Store, Gift } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 
 // Only treated as a valid referral if it's actually shaped like a UUID —
@@ -81,6 +81,15 @@ const STATES = [
   "KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
   "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT",
   "VA","WA","WV","WI","WY",
+];
+
+const PARTNER_BENEFITS = [
+  { icon: Search, title: "Carrier Search & Vetting", desc: "Search live trucker availability by lane, with new-carrier and unverified-DOT flags built in." },
+  { icon: Star, title: "Saved Carrier Lists", desc: "Build your go-to network once, stop re-searching for the same reliable trucks every week." },
+  { icon: Bell, title: "Capacity Alerts", desc: "Get notified the moment a truck matching your lane opens up." },
+  { icon: BarChart3, title: "Analytics Dashboard", desc: "See your saved carriers, active alerts, connections, and completed loads at a glance." },
+  { icon: Store, title: "Vendor Network", desc: "Browse — or get listed among — factoring, insurance, fuel, repair, and compliance providers built for trucking." },
+  { icon: Gift, title: "Referral Program", desc: "Share your link and get credit for every broker, vendor, or carrier who joins through you." },
 ];
 
 export default function Signup() {
@@ -263,6 +272,7 @@ function SignupForm() {
   }
 
   const isVendor = role === "vendor";
+  const isPartnerRole = role === "broker" || role === "vendor";
   const totalVendorSteps = 4;
 
   return (
@@ -338,6 +348,36 @@ function SignupForm() {
                 ))}
               </div>
 
+              {isPartnerRole && (
+                <div className="bg-slate-900/80 border border-blue-900/40 rounded-md p-4 mb-4">
+                  <p className="text-sm font-bold text-white mb-1">
+                    Everything you need to run your {role === "vendor" ? "vendor" : "brokerage"} business — in
+                    one place.
+                  </p>
+                  <p className="text-xs text-gray-400 mb-3">
+                    Backhaul replaces the load board, the spreadsheet of saved contacts, and the rolodex of
+                    vendors you'd otherwise be juggling separately.
+                  </p>
+                  <ul className="space-y-2 mb-3">
+                    {PARTNER_BENEFITS.map((b) => (
+                      <li key={b.title} className="flex items-start gap-2">
+                        <b.icon size={14} className="text-blue-400 mt-0.5 shrink-0" />
+                        <span className="text-xs text-gray-300">
+                          <span className="font-semibold text-white">{b.title}</span> — {b.desc}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="border-t border-slate-800 pt-3">
+                    <p className="text-sm font-bold text-white">$199/month</p>
+                    <p className="text-xs text-gray-400">
+                      One price, unlimited use — not per seat. Try free for 30 days before you're charged
+                      anything.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <label className="block text-xs uppercase tracking-wide text-gray-400 mb-1">Company name</label>
               <input
                 required
@@ -389,12 +429,6 @@ function SignupForm() {
                     className="w-full bg-slate-900/70 border border-slate-700 rounded-sm px-3 py-2 mb-4 text-sm text-white focus:outline-none focus:border-blue-500"
                   />
                 </>
-              )}
-
-              {role !== "trucker" && !isVendor && (
-                <p className="text-xs text-gray-400 mb-3 italic">
-                  Broker accounts will need a subscription to unlock full access once billing is added.
-                </p>
               )}
 
               <label className="flex items-start gap-2 mb-4 text-xs text-gray-300">
