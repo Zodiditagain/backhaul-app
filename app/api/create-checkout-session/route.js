@@ -16,12 +16,24 @@ const PRODUCTS = {
     yearly: process.env.STRIPE_ROUTE_MAP_YEARLY_PRICE_ID,
     successPath: "/route-map",
     cancelPath: "/route-map/subscribe",
+    trialDays: 7,
   },
   market_pulse: {
     monthly: process.env.STRIPE_MARKET_PULSE_MONTHLY_PRICE_ID,
     yearly: process.env.STRIPE_MARKET_PULSE_YEARLY_PRICE_ID,
     successPath: "/market-pulse",
     cancelPath: "/market-pulse/subscribe",
+    trialDays: 7,
+  },
+  // Shared $199/mo plan covering both broker and vendor accounts — gates
+  // search-carriers, saved-carriers, capacity-alerts, analytics, referrals,
+  // available-trucks, the vendor directory, and the vendor profile page.
+  partner_pro: {
+    monthly: process.env.STRIPE_PARTNER_PRO_MONTHLY_PRICE_ID,
+    yearly: process.env.STRIPE_PARTNER_PRO_YEARLY_PRICE_ID,
+    successPath: "/partner-pro/success",
+    cancelPath: "/partner-pro/subscribe",
+    trialDays: 30,
   },
 };
 
@@ -85,7 +97,7 @@ export async function POST(req) {
       // ends instead of trying (and failing) to charge nothing on file.
       payment_method_collection: "if_required",
       subscription_data: {
-        trial_period_days: 7,
+        trial_period_days: productConfig.trialDays || 7,
         trial_settings: {
           end_behavior: { missing_payment_method: "cancel" },
         },
