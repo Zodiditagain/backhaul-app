@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useRef, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   MapPin,
   Loader2,
@@ -120,8 +120,9 @@ const OFF_ROUTE_METERS = 150;
 const REROUTE_COOLDOWN_MS = 20000;
 const OFF_ROUTE_CONFIRM_COUNT = 1;
 const MAX_ACCURACY_FOR_REROUTE_METERS = 100;
-export default function RouteMapPage() {
+function RouteMapInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [hasAccess, setHasAccess] = useState(false);
   const [truckProfiles, setTruckProfiles] = useState([]);
@@ -220,6 +221,31 @@ export default function RouteMapPage() {
   useEffect(() => {
     checkAccess();
   }, []);
+  // Prefill from the Overview page's "Truck-Safe Route Planner" quick card
+  // (/route-map?originLat=&originLng=&originAddress=&destLat=&destLng=&destAddress=).
+  // Purely additive — with no matching query params this is a no-op, and it
+  // never touches truckProfiles/selectedProfileId (those still come from
+  // checkAccess() above, same as always).
+  useEffect(() => {
+    if (checkingAccess) return;
+    const oLat = searchParams.get("originLat");
+    const oLng = searchParams.get("originLng");
+    const oAddr = searchParams.get("originAddress");
+    const dLat = searchParams.get("destLat");
+    const dLng = searchParams.get("destLng");
+    const dAddr = searchParams.get("destAddress");
+    if (oLat && oLng && !Number.isNaN(Number(oLat)) && !Number.isNaN(Number(oLng))) {
+      const label = oAddr || `${Number(oLat).toFixed(3)}, ${Number(oLng).toFixed(3)}`;
+      setOrigin({ lat: Number(oLat), lng: Number(oLng), address: label });
+      setOriginQuery(label);
+    }
+    if (dLat && dLng && !Number.isNaN(Number(dLat)) && !Number.isNaN(Number(dLng))) {
+      const label = dAddr || `${Number(dLat).toFixed(3)}, ${Number(dLng).toFixed(3)}`;
+      setDestination({ lat: Number(dLat), lng: Number(dLng), address: label });
+      setDestQuery(label);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkingAccess]);
   useEffect(() => {
     if (!hasAccess || !navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
@@ -1611,5 +1637,19 @@ export default function RouteMapPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function RouteMapPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+          <p className="text-gray-400 text-sm">Loading Route Map...</p>
+        </div>
+      }
+    >
+      <RouteMapInner />
+    </Suspense>
   );
 }
