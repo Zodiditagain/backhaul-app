@@ -96,7 +96,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen">
       <header className="bg-asphalt border-b-4 border-amberx">
-        <div className="max-w-4xl mx-auto px-5 py-4 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-5 py-4 flex flex-wrap items-center justify-between gap-y-3">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rotate-45 bg-amberx flex items-center justify-center">
               <Truck className="-rotate-45" size={18} color="#1B1E21" />
@@ -106,7 +106,7 @@ export default function Dashboard() {
               <p className="text-gray-400 text-[11px] uppercase tracking-widest mt-0.5">{profile.company_name}</p>
             </div>
           </div>
-          <div className="flex items-center gap-5">
+          <div className="flex flex-wrap items-center justify-end gap-x-5 gap-y-2">
             <NotificationBell user={user} />
             {profile.is_admin && (
               <Link
