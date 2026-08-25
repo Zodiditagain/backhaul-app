@@ -486,17 +486,28 @@ export default function BrokerOverview({ user, role }) {
       // next to it), unlike the single-column route-map/market-pulse pages.
       // HERE Maps measures its container's size once at construction — if
       // the grid hadn't finished laying out yet at that instant, the map
-      // can end up sized wrong and render as an empty gray box. Force a
-      // resize a couple of frames later, once layout has definitely
-      // settled, to pick up the real, final container size.
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          map.getViewPort().resize();
-        });
+      // can end up thinking its container is 0x0 (or the wrong size) and
+      // render nothing, with no thrown error. A one-time delayed resize
+      // isn't reliable enough here, so instead watch the container with a
+      // ResizeObserver and re-resize the viewport on every real size
+      // change — this also keeps the map correctly sized if the sidebar
+      // collapses/expands or the window resizes later.
+      const resizeObserver = new ResizeObserver(() => {
+        if (mapInstance.current) {
+          try {
+            mapInstance.current.getViewPort().resize();
+          } catch {
+            // viewport not ready yet — next observed change will retry
+          }
+        }
       });
+      resizeObserver.observe(mapRef.current);
       const resizeHandler = () => map.getViewPort().resize();
       window.addEventListener("resize", resizeHandler);
-      return () => window.removeEventListener("resize", resizeHandler);
+      return () => {
+        window.removeEventListener("resize", resizeHandler);
+        resizeObserver.disconnect();
+      };
     } catch (err) {
       console.error("Capacity map failed to initialize:", err);
       setMapError("Map failed to load: " + (err?.message || "unknown error"));
@@ -508,28 +519,38 @@ export default function BrokerOverview({ user, role }) {
     const map = mapInstance.current;
     const group = markersGroupRef.current;
     if (!H || !map || !group) return;
-    group.removeAll();
-    const plotted = availableTruckers.filter((t) => t.available_lat != null && t.available_lng != null);
-    plotted.forEach((t) => {
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26"><circle cx="13" cy="13" r="10" fill="#06b6d4" fill-opacity="0.9" stroke="white" stroke-width="2"/></svg>`;
-      const icon = new H.map.Icon(svg, { size: { w: 26, h: 26 }, anchor: { x: 13, y: 13 } });
-      const marker = new H.map.Marker({ lat: t.available_lat, lng: t.available_lng }, { icon });
-      marker.setData(t.id);
-      marker.addEventListener("tap", (evt) => router.push(`/company/${evt.target.getData()}`));
-      group.addObject(marker);
-    });
-    const center = recentAlerts[0];
-    if (center && center.location_lat != null) {
-      map.setCenter({ lat: center.location_lat, lng: center.location_lng });
-      map.setZoom(7);
-    } else if (plotted.length > 0) {
-      try {
-        map.getViewModel().setLookAtData({ bounds: group.getBoundingBox() });
-      } catch {
-        // bounding box unavailable with a single point — leave default view
+    try {
+      group.removeAll();
+      // Guard against bad/partial DB rows (e.g. an alert saved before a
+      // column existed, or a non-numeric type from Supabase) — an uncaught
+      // exception in here would silently corrupt the map's render state
+      // with zero visible indication on the page.
+      const plotted = availableTruckers.filter(
+        (t) => Number.isFinite(t.available_lat) && Number.isFinite(t.available_lng)
+      );
+      plotted.forEach((t) => {
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26"><circle cx="13" cy="13" r="10" fill="#06b6d4" fill-opacity="0.9" stroke="white" stroke-width="2"/></svg>`;
+        const icon = new H.map.Icon(svg, { size: { w: 26, h: 26 }, anchor: { x: 13, y: 13 } });
+        const marker = new H.map.Marker({ lat: t.available_lat, lng: t.available_lng }, { icon });
+        marker.setData(t.id);
+        marker.addEventListener("tap", (evt) => router.push(`/company/${evt.target.getData()}`));
+        group.addObject(marker);
+      });
+      const center = recentAlerts[0];
+      if (center && Number.isFinite(center.location_lat) && Number.isFinite(center.location_lng)) {
+        map.setCenter({ lat: center.location_lat, lng: center.location_lng });
+        map.setZoom(7);
+      } else if (plotted.length > 0) {
+        try {
+          map.getViewModel().setLookAtData({ bounds: group.getBoundingBox() });
+        } catch {
+          // bounding box unavailable with a single point — leave default view
+        }
       }
+    } catch (err) {
+      console.error("Capacity map marker/recenter update failed:", err);
     }
-  }, [availableTruckers, recentAlerts, mapsReady]);
+  }, [availableTruckers, recentAlerts, mapsReady, router]);
 
   const firstName = (companyName || "there").split(" ")[0];
 
