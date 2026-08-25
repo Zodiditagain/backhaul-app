@@ -39,6 +39,54 @@ const EQUIPMENT_OPTIONS = [
   { id: "box_truck", label: "Box Truck" },
 ];
 
+// One color per equipment type for the "Capacity Near You" map markers —
+// a trucker's FIRST listed equipment type picks its marker color, matching
+// the convention already used elsewhere on this page (Recommended Carriers
+// badges also only ever show the first couple of equipment_types entries).
+const EQUIPMENT_MARKER_COLORS = {
+  dry_van: "#06b6d4", // cyan
+  reefer: "#3b82f6", // blue
+  flatbed: "#f59e0b", // amber
+  step_deck: "#8b5cf6", // violet
+  hotshot: "#ef4444", // red
+  power_only: "#10b981", // emerald
+  box_truck: "#ec4899", // pink
+};
+const DEFAULT_MARKER_COLOR = "#64748b"; // slate — no equipment type listed
+
+function escapeHtml(str) {
+  return String(str ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[c]));
+}
+
+// Raw HTML for the HERE Maps InfoBubble shown when a carrier's map marker is
+// tapped. HERE renders bubble content by inserting this string into the DOM
+// directly (it isn't passed through React), so any DB-sourced text (company
+// name) must be escaped here to avoid it being interpreted as markup.
+function truckerBubbleHtml(t) {
+  const equipLabels =
+    (t.equipment_types || []).map((eq) => EQUIPMENT_OPTIONS.find((o) => o.id === eq)?.label || eq).join(", ") ||
+    "No equipment listed";
+  const verifiedHtml = t.dot_number
+    ? '<span style="color:#0e7490;font-weight:600;">Verified</span>'
+    : '<span style="color:#b45309;font-weight:600;">Unverified</span>';
+  return `
+    <div style="font-family: system-ui, -apple-system, sans-serif; min-width: 170px; padding: 2px;">
+      <p style="margin:0 0 4px 0; font-weight:700; font-size:13px; color:#0f172a;">${escapeHtml(
+        t.company_name || "Unknown carrier"
+      )}</p>
+      <p style="margin:0 0 4px 0; font-size:11px; color:#475569;">${escapeHtml(equipLabels)}</p>
+      <p style="margin:0 0 8px 0; font-size:11px;">${verifiedHtml}</p>
+      <a href="/company/${encodeURIComponent(t.id)}" style="display:inline-block; font-size:11px; font-weight:600; color:#fff; background:#0891b2; padding:4px 9px; border-radius:5px; text-decoration:none;">View profile</a>
+    </div>
+  `;
+}
+
 // Friendly, activity-feed phrasing for each stage of the existing BOL
 // lifecycle (see components/BolForm.jsx / MatchThread.jsx) — no new schema,
 // just a nicer label than the raw status string.
@@ -119,6 +167,7 @@ export default function BrokerOverview({ user, role }) {
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const markersGroupRef = useRef(null);
+  const mapUiRef = useRef(null);
   const [mapsReady, setMapsReady] = useState(false);
   const [mapError, setMapError] = useState("");
 
@@ -493,6 +542,7 @@ export default function BrokerOverview({ user, role }) {
       } catch {
         // control id not found on this SDK version — leave native control in place
       }
+      mapUiRef.current = ui;
       markersGroupRef.current = new H.map.Group();
       map.addObject(markersGroupRef.current);
       mapInstance.current = map;
@@ -542,12 +592,40 @@ export default function BrokerOverview({ user, role }) {
       const plotted = availableTruckers.filter(
         (t) => Number.isFinite(t.available_lat) && Number.isFinite(t.available_lng)
       );
+      // Diagnostic only (not shown in the UI): if the stat tile count and
+      // the number of dots on the map ever disagree, this names exactly
+      // which trucker(s) got skipped and why, instead of leaving it a
+      // silent mystery — check the browser console.
+      const skipped = availableTruckers.filter(
+        (t) => !(Number.isFinite(t.available_lat) && Number.isFinite(t.available_lng))
+      );
+      if (skipped.length > 0) {
+        console.warn(
+          `Capacity map: ${skipped.length} available trucker(s) not plotted — missing or invalid available_lat/available_lng:`,
+          skipped.map((t) => ({
+            id: t.id,
+            company_name: t.company_name,
+            available_lat: t.available_lat,
+            available_lng: t.available_lng,
+          }))
+        );
+      }
       plotted.forEach((t) => {
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26"><circle cx="13" cy="13" r="10" fill="#06b6d4" fill-opacity="0.9" stroke="white" stroke-width="2"/></svg>`;
+        const primaryEquip = (t.equipment_types || [])[0];
+        const color = EQUIPMENT_MARKER_COLORS[primaryEquip] || DEFAULT_MARKER_COLOR;
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26"><circle cx="13" cy="13" r="10" fill="${color}" fill-opacity="0.9" stroke="white" stroke-width="2"/></svg>`;
         const icon = new H.map.Icon(svg, { size: { w: 26, h: 26 }, anchor: { x: 13, y: 13 } });
         const marker = new H.map.Marker({ lat: t.available_lat, lng: t.available_lng }, { icon });
-        marker.setData(t.id);
-        marker.addEventListener("tap", (evt) => router.push(`/company/${evt.target.getData()}`));
+        marker.setData(t);
+        marker.addEventListener("tap", (evt) => {
+          const ui = mapUiRef.current;
+          if (!ui || !H.ui || !H.ui.InfoBubble) return;
+          ui.getBubbles().forEach((b) => ui.removeBubble(b));
+          const bubble = new H.ui.InfoBubble(evt.target.getGeometry(), {
+            content: truckerBubbleHtml(evt.target.getData()),
+          });
+          ui.addBubble(bubble);
+        });
         group.addObject(marker);
       });
       const center = recentAlerts[0];
@@ -782,7 +860,26 @@ export default function BrokerOverview({ user, role }) {
             {mapError ? (
               <p className="text-xs text-slate-400 py-6 text-center">{mapError}</p>
             ) : (
-              <div ref={mapRef} className="w-full h-72 rounded-lg overflow-hidden bg-slate-100" />
+              <>
+                <div ref={mapRef} className="w-full h-72 rounded-lg overflow-hidden bg-slate-100" />
+                {availableTruckers.length > 0 && (
+                  <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-3 pt-3 border-t border-slate-100">
+                    {Array.from(new Set(availableTruckers.map((t) => (t.equipment_types || [])[0] || "__none__"))).map(
+                      (key) => (
+                        <div key={key} className="flex items-center gap-1.5">
+                          <span
+                            className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
+                            style={{ backgroundColor: EQUIPMENT_MARKER_COLORS[key] || DEFAULT_MARKER_COLOR }}
+                          />
+                          <span className="text-[10px] text-slate-500">
+                            {EQUIPMENT_OPTIONS.find((o) => o.id === key)?.label || "Unspecified equipment"}
+                          </span>
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </section>
         </div>
