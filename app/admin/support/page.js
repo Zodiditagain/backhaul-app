@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, LifeBuoy, Loader2, CheckCircle2, RotateCcw } from "lucide-react";
+import { ArrowLeft, LifeBuoy, Loader2, CheckCircle2, RotateCcw, Sparkles } from "lucide-react";
 import { authHeaders } from "../../../lib/supabaseClient";
 
 export default function AdminSupportPage() {
@@ -101,12 +101,25 @@ export default function AdminSupportPage() {
                           Priority
                         </span>
                       )}
+                      {r.ai_responded && (
+                        <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-md bg-blue-500/20 border border-blue-500 text-blue-400">
+                          <Sparkles size={10} /> AI Replied
+                        </span>
+                      )}
                       <p className="text-sm font-semibold text-white">{r.subject}</p>
                     </div>
                     <p className="text-xs text-gray-500">
                       {r.requester?.company_name || "Unknown"} ({r.requester?.role || "?"})
                     </p>
                     <p className="text-xs text-gray-400 mt-1.5 max-w-2xl">{r.message}</p>
+                    {r.ai_responded && r.ai_reply && (
+                      <div className="mt-2 bg-slate-950 border border-blue-900/40 rounded-md p-2.5 max-w-2xl">
+                        <p className="text-[10px] uppercase tracking-wide text-blue-400 font-semibold mb-1">
+                          What the AI sent
+                        </p>
+                        <p className="text-xs text-gray-300 whitespace-pre-line">{r.ai_reply}</p>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {r.status === "resolved" ? (
