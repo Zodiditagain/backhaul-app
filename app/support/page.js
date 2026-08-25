@@ -2,8 +2,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, LifeBuoy, Loader2, CheckCircle2 } from "lucide-react";
-import { supabase } from "../../lib/supabaseClient";
+import { ArrowLeft, LifeBuoy, Loader2, CheckCircle2, Sparkles } from "lucide-react";
+import { supabase, authHeaders } from "../../lib/supabaseClient";
 
 export default function SupportPage() {
   const router = useRouter();
@@ -16,6 +16,7 @@ export default function SupportPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [autoAnswered, setAutoAnswered] = useState(false);
 
   const [requests, setRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
@@ -66,19 +67,21 @@ export default function SupportPage() {
       return;
     }
     setSubmitting(true);
-    const { error } = await supabase.from("support_requests").insert({
-      user_id: userId,
-      subject: subject.trim(),
-      message: message.trim(),
-      priority: isPriority,
+    const headers = { ...(await authHeaders()), "Content-Type": "application/json" };
+    const res = await fetch("/api/support/submit", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ subject: subject.trim(), message: message.trim() }),
     });
+    const data = await res.json();
     setSubmitting(false);
-    if (error) {
-      setSubmitError(error.message);
+    if (!res.ok) {
+      setSubmitError(data.error || "Something went wrong sending your request.");
       return;
     }
     setSubject("");
     setMessage("");
+    setAutoAnswered(!!data.request?.ai_responded);
     setSubmitSuccess(true);
     setTimeout(() => setSubmitSuccess(false), 5000);
     loadRequests();
@@ -135,7 +138,10 @@ export default function SupportPage() {
           {submitError && <p className="text-xs text-red-400">{submitError}</p>}
           {submitSuccess && (
             <p className="text-xs text-green-400 flex items-center gap-1.5">
-              <CheckCircle2 size={13} /> Request sent — we'll be in touch soon.
+              <CheckCircle2 size={13} />
+              {autoAnswered
+                ? "Answered instantly — check your email and the list below."
+                : "Request sent — we'll be in touch soon."}
             </p>
           )}
           <button
@@ -158,20 +164,35 @@ export default function SupportPage() {
           ) : (
             requests.map((r) => (
               <div key={r.id} className="bg-slate-900 border border-slate-800 rounded-md px-4 py-3">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <p className="text-sm font-semibold text-white">{r.subject}</p>
-                  <span
-                    className={
-                      "text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-md border shrink-0 " +
-                      (r.status === "resolved"
-                        ? "bg-green-500/15 border-green-500/40 text-green-400"
-                        : "bg-slate-800 border-slate-700 text-gray-400")
-                    }
-                  >
-                    {r.status === "resolved" ? "Resolved" : "Open"}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {r.ai_responded && (
+                      <span className="flex items-center gap-1 text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-md border bg-blue-500/15 border-blue-500/40 text-blue-400">
+                        <Sparkles size={10} /> Answered
+                      </span>
+                    )}
+                    <span
+                      className={
+                        "text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-md border " +
+                        (r.status === "resolved"
+                          ? "bg-green-500/15 border-green-500/40 text-green-400"
+                          : "bg-slate-800 border-slate-700 text-gray-400")
+                      }
+                    >
+                      {r.status === "resolved" ? "Resolved" : "Open"}
+                    </span>
+                  </div>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">{r.message}</p>
+                {r.ai_responded && r.ai_reply && (
+                  <div className="mt-2 bg-slate-950 border border-blue-900/40 rounded-md p-3">
+                    <p className="text-[10px] uppercase tracking-wide text-blue-400 font-semibold mb-1">
+                      Backhaul replied
+                    </p>
+                    <p className="text-xs text-gray-300 whitespace-pre-line">{r.ai_reply}</p>
+                  </div>
+                )}
               </div>
             ))
           )}
