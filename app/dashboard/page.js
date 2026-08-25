@@ -2,11 +2,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Truck, LogOut, Settings, Shield, Calculator, Map, Activity, Newspaper, ShieldCheck, Search, Star, Bell, BarChart3, Gift, LifeBuoy, Store } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
 import TruckerDashboard from "../../components/TruckerDashboard";
-import MatchmakingDashboard from "../../components/MatchmakingDashboard";
-import NotificationBell from "../../components/NotificationBell";
+import BrokerOverview from "../../components/BrokerOverview";
+import Sidebar from "../../components/Sidebar";
 import WelcomeModal from "../../components/WelcomeModal";
 export default function Dashboard() {
   const router = useRouter();
@@ -42,21 +42,13 @@ export default function Dashboard() {
           setShowWelcome(true);
         }
       }
-      // Safety Tip of the Day: a fixed, pre-written library (not AI-generated
-      // day to day — see safety_tips table) rotated deterministically by
-      // day-of-year, filtered to tips tagged "all" plus whichever audience
-      // matches this user's role. Same tip shows all day, changes daily,
-      // no server-side scheduling needed.
-      const audienceBucket =
-        profileData?.role === "trucker"
-          ? "trucker"
-          : profileData?.role === "broker" || profileData?.role === "vendor"
-          ? "broker_vendor"
-          : null;
+      // Safety Tip of the Day (trucker-only here — the broker/vendor version
+      // of this is rendered inside BrokerOverview itself now, styled to
+      // match the new "navy-and-cyan" look).
       const { data: tipsData } = await supabase
         .from("safety_tips")
         .select("title, body")
-        .in("audience", audienceBucket ? ["all", audienceBucket] : ["all"])
+        .in("audience", ["all", "trucker"])
         .order("sort_order", { ascending: true });
       if (tipsData && tipsData.length > 0) {
         const startOfYear = new Date(new Date().getFullYear(), 0, 0);
@@ -78,231 +70,89 @@ export default function Dashboard() {
     }
     load();
   }, [router]);
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    router.replace("/login");
-  }
   async function handleCloseWelcome() {
     setShowWelcome(false);
     if (user) {
       await supabase.from("profiles").update({ welcome_seen: true }).eq("id", user.id);
     }
   }
-  if (loading) return <div className="p-8 text-steelgray">Loading...</div>;
-  if (!profile) return <div className="p-8 text-alertred">Couldn't load your profile. Try logging in again.</div>;
-  const isPartner = profile.role === "broker" || profile.role === "vendor";
+  if (loading) return <div className="p-8 text-slate-500">Loading...</div>;
+  if (!profile) return <div className="p-8 text-red-500">Couldn't load your profile. Try logging in again.</div>;
+
   const isTrucker = profile.role === "trucker";
-  const isVendor = profile.role === "vendor";
+
   return (
-    <div className="min-h-screen">
-      <header className="bg-asphalt border-b-4 border-amberx">
-        <div className="max-w-7xl mx-auto px-5 py-4 flex flex-wrap items-center justify-between gap-y-3">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rotate-45 bg-amberx flex items-center justify-center">
-              <Truck className="-rotate-45" size={18} color="#1B1E21" />
-            </div>
-            <div>
-              <h1 className="text-white text-xl font-bold leading-none">BACKHAUL</h1>
-              <p className="text-gray-400 text-[11px] uppercase tracking-widest mt-0.5">{profile.company_name}</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-x-5 gap-y-2">
-            <NotificationBell user={user} />
-            {profile.is_admin && (
-              <Link
-                href="/admin"
-                className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-mono uppercase tracking-wide px-2.5 py-1.5 rounded-sm"
-              >
-                <Shield size={14} /> Admin
-              </Link>
-            )}
-            {isTrucker && (
-              <Link
-                href="/route-map"
-                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
-              >
-                <Map size={14} /> Route Map
-              </Link>
-            )}
-            {isTrucker && (
-              <Link
-                href="/market-pulse"
-                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
-              >
-                <Activity size={14} /> Market Pulse
-              </Link>
-            )}
-            {(isTrucker || isPartner) && (
-              <Link
-                href="/business-tools"
-                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
-              >
-                <Calculator size={14} /> Business Tools
-              </Link>
-            )}
-            {(isTrucker || isPartner) && (
-              <Link
-                href="/vendors"
-                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
-              >
-                <Store size={14} /> Vendor Directory
-              </Link>
-            )}
-            {isPartner && (
-              <Link
-                href="/available-trucks"
-                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
-              >
-                <Truck size={14} /> Available Trucks
-              </Link>
-            )}
-            {isPartner && (
-              <Link
-                href="/broker/search-carriers"
-                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
-              >
-                <Search size={14} /> Search Carriers
-              </Link>
-            )}
-            {isPartner && (
-              <Link
-                href="/broker/saved-carriers"
-                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
-              >
-                <Star size={14} /> Saved Carriers
-              </Link>
-            )}
-            {isPartner && (
-              <Link
-                href="/broker/capacity-alerts"
-                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
-              >
-                <Bell size={14} /> Capacity Alerts
-              </Link>
-            )}
-            {isPartner && (
-              <Link
-                href="/broker/analytics"
-                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
-              >
-                <BarChart3 size={14} /> Analytics
-              </Link>
-            )}
-            {isPartner && (
-              <Link
-                href="/broker/referrals"
-                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
-              >
-                <Gift size={14} /> Referrals
-              </Link>
-            )}
-            {isVendor && (
-              <Link
-                href="/vendor-profile"
-                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
-              >
-                <Store size={14} /> Vendor Profile
-              </Link>
-            )}
-            {isPartner && (
-              <Link
-                href="/onboarding-partner"
-                className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
-              >
-                <Settings size={14} /> Edit Profile
-              </Link>
-            )}
-            <Link
-              href="/support"
-              className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
-            >
-              <LifeBuoy size={14} /> Support
-            </Link>
-            <Link
-              href="/blog"
-              className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
-            >
-              <Newspaper size={14} /> Blog
-            </Link>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-1.5 text-gray-300 hover:text-amberx text-xs font-mono uppercase tracking-wide"
-            >
-              <LogOut size={14} /> Log out
-            </button>
-          </div>
-        </div>
-      </header>
-      <main className="max-w-4xl mx-auto px-5 py-6">
-        {tipOfDay && (
-          <div className="bg-asphalt border border-highway/30 rounded-sm p-4 mb-4">
-            <div className="flex items-center gap-1.5 mb-2">
-              <ShieldCheck size={14} className="text-highway" />
-              <p className="text-highway text-[10px] uppercase tracking-widest font-mono">Safety Tip of the Day</p>
-            </div>
-            <p className="text-white font-semibold text-sm mb-1">{tipOfDay.title}</p>
-            <p className="text-gray-400 text-xs leading-relaxed">{tipOfDay.body}</p>
-          </div>
-        )}
-        {latestPost && (
-          <Link
-            href={`/blog/${latestPost.slug}`}
-            className="block bg-asphalt border border-amberx/30 hover:border-amberx rounded-sm p-4 mb-6 transition"
-          >
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <div className="min-w-0">
-                <p className="text-amberx text-[10px] uppercase tracking-widest font-mono mb-1">
-                  From the Backhaul Blog
-                </p>
-                <p className="text-white font-semibold text-sm mb-1.5 truncate">{latestPost.title}</p>
-                {latestPost.headline_stat?.value && (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-lg font-bold text-white">{latestPost.headline_stat.value}</span>
-                    {latestPost.headline_stat.delta && (
-                      <span
-                        className={`inline-flex items-center gap-1 text-[11px] font-mono border rounded-full px-2 py-0.5 ${
-                          latestPost.headline_stat.direction === "good"
-                            ? "bg-green-500/15 text-green-400 border-green-500/40"
-                            : latestPost.headline_stat.direction === "bad"
-                            ? "bg-red-500/15 text-red-400 border-red-500/40"
-                            : "bg-blue-500/15 text-blue-400 border-blue-500/40"
-                        }`}
-                      >
-                        <span>
-                          {latestPost.headline_stat.direction === "good"
-                            ? "▲"
-                            : latestPost.headline_stat.direction === "bad"
-                            ? "▼"
-                            : "•"}
-                        </span>
-                        {latestPost.headline_stat.delta}
-                      </span>
-                    )}
-                  </div>
-                )}
+    <Sidebar user={user} profile={profile} title="Overview">
+      {isTrucker ? (
+        <div className="max-w-4xl mx-auto">
+          {tipOfDay && (
+            <div className="bg-white border border-slate-200 rounded-lg p-4 mb-4">
+              <div className="flex items-center gap-1.5 mb-2">
+                <ShieldCheck size={14} className="text-cyan-600" />
+                <p className="text-cyan-700 text-[10px] uppercase tracking-widest font-semibold">Safety Tip of the Day</p>
               </div>
-              <span className="shrink-0 text-xs font-mono uppercase tracking-wide bg-amberx text-asphalt px-3 py-2 rounded-sm">
-                Read More
-              </span>
+              <p className="text-slate-900 font-semibold text-sm mb-1">{tipOfDay.title}</p>
+              <p className="text-slate-500 text-xs leading-relaxed">{tipOfDay.body}</p>
             </div>
-          </Link>
-        )}
-        {profile.role === "trucker" ? (
+          )}
+          {latestPost && (
+            <Link
+              href={`/blog/${latestPost.slug}`}
+              className="block bg-white border border-slate-200 hover:border-cyan-300 rounded-lg p-4 mb-6 transition"
+            >
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="min-w-0">
+                  <p className="text-cyan-700 text-[10px] uppercase tracking-widest font-semibold mb-1">
+                    From the Backhaul Blog
+                  </p>
+                  <p className="text-slate-900 font-semibold text-sm mb-1.5 truncate">{latestPost.title}</p>
+                  {latestPost.headline_stat?.value && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-lg font-bold text-slate-900">{latestPost.headline_stat.value}</span>
+                      {latestPost.headline_stat.delta && (
+                        <span
+                          className={`inline-flex items-center gap-1 text-[11px] font-mono border rounded-full px-2 py-0.5 ${
+                            latestPost.headline_stat.direction === "good"
+                              ? "bg-green-500/15 text-green-600 border-green-500/40"
+                              : latestPost.headline_stat.direction === "bad"
+                              ? "bg-red-500/15 text-red-600 border-red-500/40"
+                              : "bg-blue-500/15 text-blue-600 border-blue-500/40"
+                          }`}
+                        >
+                          <span>
+                            {latestPost.headline_stat.direction === "good"
+                              ? "▲"
+                              : latestPost.headline_stat.direction === "bad"
+                              ? "▼"
+                              : "•"}
+                          </span>
+                          {latestPost.headline_stat.delta}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <span className="shrink-0 text-xs font-semibold uppercase tracking-wide bg-cyan-600 text-white px-3 py-2 rounded-md">
+                  Read More
+                </span>
+              </div>
+            </Link>
+          )}
           <TruckerDashboard user={user} />
-        ) : (
-          <MatchmakingDashboard user={user} role={profile.role} />
-        )}
-      </main>
-      <footer className="max-w-4xl mx-auto px-5 py-6 flex items-center justify-center gap-3 text-xs text-gray-400">
-        <Link href="/privacy" target="_blank" className="hover:text-amberx underline">
+        </div>
+      ) : (
+        <BrokerOverview user={user} role={profile.role} />
+      )}
+      <div className="max-w-4xl mx-auto py-6 flex items-center justify-center gap-3 text-xs text-slate-400">
+        <Link href="/privacy" target="_blank" className="hover:text-cyan-600 underline">
           Privacy Policy
         </Link>
-        <span className="text-gray-300">·</span>
-        <Link href="/terms" target="_blank" className="hover:text-amberx underline">
+        <span>·</span>
+        <Link href="/terms" target="_blank" className="hover:text-cyan-600 underline">
           Terms of Service
         </Link>
-      </footer>
+      </div>
       {showWelcome && <WelcomeModal onClose={handleCloseWelcome} />}
-    </div>
+    </Sidebar>
   );
 }
