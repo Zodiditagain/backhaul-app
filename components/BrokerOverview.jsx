@@ -628,17 +628,35 @@ export default function BrokerOverview({ user, role }) {
         });
         group.addObject(marker);
       });
+      // Frame the view around EVERYTHING relevant — the saved alert location
+      // (if any) AND every plotted trucker — instead of hard-centering on
+      // just the alert and potentially cutting other truckers out of view
+      // entirely. With only one relevant point, center on it directly
+      // (a zero-size bounding box doesn't have a sensible zoom level).
       const center = recentAlerts[0];
+      const focusPoints = [];
       if (center && Number.isFinite(center.location_lat) && Number.isFinite(center.location_lng)) {
-        map.setCenter({ lat: center.location_lat, lng: center.location_lng });
+        focusPoints.push({ lat: center.location_lat, lng: center.location_lng });
+      }
+      plotted.forEach((t) => focusPoints.push({ lat: t.available_lat, lng: t.available_lng }));
+
+      if (focusPoints.length === 1) {
+        map.setCenter(focusPoints[0]);
         map.setZoom(7);
-      } else if (plotted.length > 0) {
+      } else if (focusPoints.length > 1) {
         try {
-          map.getViewModel().setLookAtData({ bounds: group.getBoundingBox() });
-        } catch {
-          // bounding box unavailable with a single point — leave default view
+          const lats = focusPoints.map((p) => p.lat);
+          const lngs = focusPoints.map((p) => p.lng);
+          const bounds = new H.geo.Rect(Math.max(...lats), Math.min(...lngs), Math.min(...lats), Math.max(...lngs));
+          map.getViewModel().setLookAtData({ bounds });
+        } catch (err) {
+          console.error("Capacity map bounds calculation failed:", err);
+          map.setCenter(focusPoints[0]);
+          map.setZoom(6);
         }
       }
+      // else: no saved alert and no plotted truckers — leave the default
+      // nationwide view from initial map construction.
     } catch (err) {
       console.error("Capacity map marker/recenter update failed:", err);
     }
