@@ -452,7 +452,21 @@ export default function BrokerOverview({ user, role }) {
   }, []);
 
   useEffect(() => {
-    if (!mapsReady || !mapRef.current || mapInstance.current) return;
+    // IMPORTANT: this effect only depends on [mapsReady, loading] — not on
+    // mapRef itself, because refs don't trigger re-renders/effects when
+    // they change. mapsReady can flip to true almost immediately on mount
+    // (window.H is already loaded from a previous page in the same tab,
+    // e.g. /route-map, since Next.js client-side navigation never unloads
+    // script tags) — well before loadAll() finishes and this component
+    // stops rendering the "loading" spinner in place of the real JSX tree
+    // that contains <div ref={mapRef}>. Without `loading` as a dependency,
+    // the effect would run once while mapRef.current is still null, bail
+    // out silently (no error — it's just an early return), and then never
+    // fire again since mapsReady itself never changes a second time,
+    // leaving the map permanently blank with zero error text. Including
+    // `loading` here makes the effect retry the instant the container
+    // actually mounts.
+    if (!mapsReady || loading || !mapRef.current || mapInstance.current) return;
     const apikey = process.env.NEXT_PUBLIC_HERE_MAPS_KEY;
     if (!apikey) {
       setMapError("Map isn't configured yet — NEXT_PUBLIC_HERE_MAPS_KEY is missing.");
@@ -512,7 +526,7 @@ export default function BrokerOverview({ user, role }) {
       console.error("Capacity map failed to initialize:", err);
       setMapError("Map failed to load: " + (err?.message || "unknown error"));
     }
-  }, [mapsReady]);
+  }, [mapsReady, loading]);
 
   useEffect(() => {
     const H = window.H;
