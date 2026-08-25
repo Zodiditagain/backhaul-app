@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Truck, MapPin, Clock, Loader2, Crosshair, Star, MessageCircle, Bell, BadgeCheck, ShieldAlert } from "lucide-react";
 import { supabase, authHeaders } from "../../../lib/supabaseClient";
@@ -43,7 +43,26 @@ function isNewCarrier(createdAt) {
 }
 
 export default function SearchCarriersPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6">
+          <p className="text-gray-400 text-sm">Loading...</p>
+        </div>
+      }
+    >
+      <SearchCarriersInner />
+    </Suspense>
+  );
+}
+
+// useSearchParams() below reads the ?equipment=&q=&lat=&lng= prefill that the
+// dashboard's "Find a Carrier" quick-search links here with — Next requires
+// a Suspense boundary around any component that calls it directly in a page,
+// hence the wrapper above.
+function SearchCarriersInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [userId, setUserId] = useState(null);
   const [partnerRole, setPartnerRole] = useState(null);
@@ -145,6 +164,26 @@ export default function SearchCarriersPage() {
   useEffect(() => {
     loadCompletedHistory();
   }, [loadCompletedHistory]);
+
+  // Prefill from the dashboard's "Find a Carrier" quick-search, which links
+  // here with ?equipment=&q=&lat=&lng= — runs once access is confirmed so it
+  // never fights with the user's own later edits to these fields.
+  useEffect(() => {
+    if (checkingAccess) return;
+    const eq = searchParams.get("equipment");
+    const lat = searchParams.get("lat");
+    const lng = searchParams.get("lng");
+    const q = searchParams.get("q");
+    if (eq && EQUIPMENT_OPTIONS.some((o) => o.id === eq)) setEquipmentFilter(eq);
+    if (lat && lng && !Number.isNaN(Number(lat)) && !Number.isNaN(Number(lng))) {
+      const label = q || `${Number(lat).toFixed(3)}, ${Number(lng).toFixed(3)}`;
+      setSearchPoint({ lat: Number(lat), lng: Number(lng), label });
+      setSearchQuery(label);
+    } else if (q) {
+      setSearchQuery(q);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkingAccess]);
 
   const fetchSuggestions = useCallback(async (q) => {
     if (q.trim().length < 3) {
