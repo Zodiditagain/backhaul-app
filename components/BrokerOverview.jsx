@@ -431,43 +431,76 @@ export default function BrokerOverview({ user, role }) {
         loadedCount += 1;
         if (loadedCount === scripts.length) setMapsReady(true);
       };
+      // Surfaces a real message on the page itself instead of leaving the
+      // map area blank forever with no clue why (e.g. a network block, an
+      // ad/content blocker, or the HERE CDN being unreachable).
+      script.onerror = () => {
+        setMapError("Map scripts failed to load — check your connection and refresh the page.");
+      };
       document.body.appendChild(script);
     });
+    // Belt-and-suspenders: if nothing above ever flips mapsReady (script
+    // tags silently never fire load/error — has happened with some browser
+    // extensions), stop waiting forever and tell the user instead of
+    // leaving a permanently empty gray box.
+    const timeout = setTimeout(() => {
+      if (!window.H) {
+        setMapError((prev) => prev || "Map is taking too long to load — refresh the page to retry.");
+      }
+    }, 12000);
+    return () => clearTimeout(timeout);
   }, []);
 
   useEffect(() => {
     if (!mapsReady || !mapRef.current || mapInstance.current) return;
     const apikey = process.env.NEXT_PUBLIC_HERE_MAPS_KEY;
     if (!apikey) {
-      setMapError("Map isn't configured yet.");
+      setMapError("Map isn't configured yet — NEXT_PUBLIC_HERE_MAPS_KEY is missing.");
       return;
     }
-    const H = window.H;
-    const platform = new H.service.Platform({ apikey });
-    const defaultLayers = platform.createDefaultLayers();
-    const exploreTileService = platform.getRasterTileService({
-      queryParams: { style: "explore.day", size: "512", ppi: 400 },
-    });
-    const exploreTileProvider = new H.service.rasterTile.Provider(exploreTileService, { tileSize: 512 });
-    const exploreLayer = new H.map.layer.TileLayer(exploreTileProvider);
-    const map = new H.Map(mapRef.current, exploreLayer, {
-      center: { lat: 39.8283, lng: -98.5795 },
-      zoom: 4,
-      pixelRatio: window.devicePixelRatio || 1,
-    });
-    new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
-    const ui = H.ui.UI.createDefault(map, defaultLayers);
     try {
-      ui.removeControl("mapsettings");
-    } catch {
-      // control id not found on this SDK version — leave native control in place
+      const H = window.H;
+      const platform = new H.service.Platform({ apikey });
+      const defaultLayers = platform.createDefaultLayers();
+      const exploreTileService = platform.getRasterTileService({
+        queryParams: { style: "explore.day", size: "512", ppi: 400 },
+      });
+      const exploreTileProvider = new H.service.rasterTile.Provider(exploreTileService, { tileSize: 512 });
+      const exploreLayer = new H.map.layer.TileLayer(exploreTileProvider);
+      const map = new H.Map(mapRef.current, exploreLayer, {
+        center: { lat: 39.8283, lng: -98.5795 },
+        zoom: 4,
+        pixelRatio: window.devicePixelRatio || 1,
+      });
+      new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
+      const ui = H.ui.UI.createDefault(map, defaultLayers);
+      try {
+        ui.removeControl("mapsettings");
+      } catch {
+        // control id not found on this SDK version — leave native control in place
+      }
+      markersGroupRef.current = new H.map.Group();
+      map.addObject(markersGroupRef.current);
+      mapInstance.current = map;
+      // This map sits in a two-column CSS grid (a narrower sidebar column
+      // next to it), unlike the single-column route-map/market-pulse pages.
+      // HERE Maps measures its container's size once at construction — if
+      // the grid hadn't finished laying out yet at that instant, the map
+      // can end up sized wrong and render as an empty gray box. Force a
+      // resize a couple of frames later, once layout has definitely
+      // settled, to pick up the real, final container size.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          map.getViewPort().resize();
+        });
+      });
+      const resizeHandler = () => map.getViewPort().resize();
+      window.addEventListener("resize", resizeHandler);
+      return () => window.removeEventListener("resize", resizeHandler);
+    } catch (err) {
+      console.error("Capacity map failed to initialize:", err);
+      setMapError("Map failed to load: " + (err?.message || "unknown error"));
     }
-    markersGroupRef.current = new H.map.Group();
-    map.addObject(markersGroupRef.current);
-    mapInstance.current = map;
-    const resizeHandler = () => map.getViewPort().resize();
-    window.addEventListener("resize", resizeHandler);
-    return () => window.removeEventListener("resize", resizeHandler);
   }, [mapsReady]);
 
   useEffect(() => {
