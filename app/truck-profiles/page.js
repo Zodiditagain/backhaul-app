@@ -2,10 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
   Truck,
-  ArrowLeft,
   Plus,
   Pencil,
   Trash2,
@@ -15,6 +13,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient";
+import TruckerSidebar from "../../components/TruckerSidebar";
 
 const VEHICLE_TYPES = [
   { value: "tractor_trailer", label: "Tractor-Trailer" },
@@ -90,6 +89,8 @@ function formatFeetInches(totalIn) {
 export default function TruckProfilesPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [profiles, setProfiles] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -107,6 +108,13 @@ export default function TruckProfilesPage() {
         router.push("/login");
         return;
       }
+      setUser(user);
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("company_name, role, is_admin")
+        .eq("id", user.id)
+        .single();
+      setProfile(profileData);
       await loadProfiles();
       setLoading(false);
     }
@@ -279,24 +287,17 @@ export default function TruckProfilesPage() {
     await loadProfiles();
   }
 
-  if (loading) {
+  if (loading || !profile) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6">
+      <div className="min-h-screen bg-[#0b1220] flex items-center justify-center px-6">
         <p className="text-gray-400 text-sm">Loading your truck profiles...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 px-6 py-10">
+    <TruckerSidebar user={user} profile={profile} title="Truck & Equipment">
       <div className="max-w-3xl mx-auto">
-        <Link
-          href="/route-map"
-          className="inline-flex items-center gap-1.5 text-gray-400 hover:text-white text-xs font-medium uppercase tracking-wide mb-4"
-        >
-          <ArrowLeft size={14} />
-          Back to Route Map
-        </Link>
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div className="flex items-center gap-2">
             <Truck size={22} className="text-blue-400" />
@@ -635,7 +636,7 @@ export default function TruckProfilesPage() {
           ))}
         </div>
       </div>
-    </div>
+    </TruckerSidebar>
   );
 }
 
