@@ -164,7 +164,7 @@ function DocumentsInner() {
                   </p>
                 </button>
                 {b.pod_url && (
-                  
+                    href={b.pod_url}
                     href={b.pod_url}
                     target="_blank"
                     rel="noopener noreferrer"
