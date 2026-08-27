@@ -81,6 +81,11 @@ export default function Sidebar({ user, profile, title = "Overview", children })
       ],
     },
     {
+      title: "Account",
+      hidden: !isPartner,
+      items: [{ href: "/broker/settings", label: "Settings", icon: Settings }],
+    },
+    {
       title: "On The Road",
       hidden: !isTrucker,
       items: [
