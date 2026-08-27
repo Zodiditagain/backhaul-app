@@ -21,6 +21,11 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
+  FolderOpen,
+  History,
+  Gift,
+  Settings as SettingsIcon,
 } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import NotificationBell from "./NotificationBell";
@@ -33,16 +38,10 @@ import NotificationBell from "./NotificationBell";
 //     ...page content...
 //   </TruckerSidebar>
 //
-// Rolled out so far on: /dashboard (Overview), /truck-profiles. Carrier
-// Profile lives at /carrier-profile. Messages/Route Map/Market Pulse reuse
-// their existing pages unchanged for now — only the shell around them is new.
-//
-// NOT YET BUILT (intentionally left off this nav for now rather than linking
-// somewhere fake): a dedicated "My Loads" list, a "Documents & BOL" archive
-// separate from each match's own thread, a standalone "My Availability"
-// history page (the live toggle itself lives right on Overview), Referrals,
-// and Settings. These are real, deferred follow-up work, not omissions by
-// accident.
+// Every nav item from the original redesign mockup is now built: Overview,
+// Messages, Route Map, Market Pulse, My Loads, Documents & BOL, Carrier
+// Profile, Truck & Equipment, My Availability, Referrals, Business Tools,
+// Vendor Directory, Support, Blog, Settings.
 export default function TruckerSidebar({ user, profile, title = "Overview", children }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -112,10 +111,25 @@ export default function TruckerSidebar({ user, profile, title = "Overview", chil
       ],
     },
     {
+      title: "Loads",
+      items: [
+        { href: "/loads", label: "My Loads", icon: ClipboardList },
+        { href: "/documents", label: "Documents & BOL", icon: FolderOpen },
+      ],
+    },
+    {
       title: "My Business",
       items: [
         { href: "/carrier-profile", label: "Carrier Profile", icon: User },
         { href: "/truck-profiles", label: "Truck & Equipment", icon: Wrench },
+      ],
+    },
+    {
+      title: "Account",
+      items: [
+        { href: "/availability", label: "My Availability", icon: History },
+        { href: "/referrals", label: "Referrals", icon: Gift },
+        { href: "/settings", label: "Settings", icon: SettingsIcon },
       ],
     },
     {
