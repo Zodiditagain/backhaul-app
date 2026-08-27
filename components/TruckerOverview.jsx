@@ -251,6 +251,15 @@ export default function TruckerOverview({ user }) {
         setMarkingAvailable(false);
         if (!error) {
           setProfile((p) => ({ ...p, available_now: true, available_since: nowIso, available_location_label: label }));
+          // Best-effort history log for the standalone Availability History
+          // page — failure here shouldn't block the actual availability
+          // toggle the user is waiting on.
+          supabase
+            .from("availability_log")
+            .insert({ user_id: user.id, event: "available", location_lat: lat, location_lng: lng, location_label: label })
+            .then(({ error: logError }) => {
+              if (logError) console.error("Availability log insert failed:", logError);
+            });
         } else {
           setAvailError("Couldn't update your availability. Try again.");
         }
@@ -267,7 +276,15 @@ export default function TruckerOverview({ user }) {
     setMarkingAvailable(true);
     const { error } = await supabase.from("profiles").update({ available_now: false }).eq("id", user.id);
     setMarkingAvailable(false);
-    if (!error) setProfile((p) => ({ ...p, available_now: false }));
+    if (!error) {
+      setProfile((p) => ({ ...p, available_now: false }));
+      supabase
+        .from("availability_log")
+        .insert({ user_id: user.id, event: "unavailable" })
+        .then(({ error: logError }) => {
+          if (logError) console.error("Availability log insert failed:", logError);
+        });
+    }
   }
 
   async function openConversation(m) {
@@ -461,6 +478,9 @@ export default function TruckerOverview({ user }) {
           </button>
         </div>
         {availError && <p className="text-xs text-red-400 mt-3">{availError}</p>}
+        <Link href="/availability" className="inline-block text-xs text-slate-500 hover:text-blue-400 mt-3">
+          View availability history →
+        </Link>
       </div>
 
       {/* Stat tiles */}
