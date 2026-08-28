@@ -125,41 +125,19 @@ export async function POST(req) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
-  // Best-effort auto-response. Any failure here (missing keys, API error,
-  // email send failure) just leaves the ticket as a normal open request for
-  // a human to handle — it never blocks or fails the submission itself.
+  // Best-effort auto-response. Any failure here (missing keys, API error)
+  // just leaves the ticket as a normal open request for a human to handle —
+  // it never blocks or fails the submission itself.
   const decision = await classifyAndMaybeAnswer(subject, message);
 
   if (!decision.can_answer) {
     return NextResponse.json({ request: inserted });
   }
 
-  let emailSent = false;
-  if (process.env.RESEND_API_KEY && process.env.SUPPORT_FROM_EMAIL) {
-    try {
-      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(user.id);
-      const toEmail = authUser?.user?.email;
-      if (toEmail) {
-        const resend = new Resend(process.env.RESEND_API_KEY);
-        const footer = "\n\n---\nBackhaul (joinbackhaul.com)\nReply to this email if this didn't answer your question — a person will follow up.";
-        const { error: sendError } = await resend.emails.send({
-          from: process.env.SUPPORT_FROM_EMAIL,
-          to: toEmail,
-          subject: `Re: ${subject}`,
-          text: decision.reply + footer,
-          replyTo: SUPPORT_REPLY_TO,
-        });
-        emailSent = !sendError;
-      }
-    } catch (err) {
-      console.error("Support auto-reply email failed:", err);
-    }
-  }
-
-  if (!emailSent) {
-    return NextResponse.json({ request: inserted });
-  }
-
+  // Save the AI's answer immediately so it shows up right away on the
+  // customer's Support page — this must not depend on the confirmation
+  // email below actually sending. Emailing a copy is a nice-to-have on top
+  // of the in-app answer, not a requirement for it.
   const { data: updated, error: updateError } = await supabaseAdmin
     .from("support_requests")
     .update({
@@ -173,9 +151,29 @@ export async function POST(req) {
     .select()
     .single();
 
-  if (updateError) {
-    return NextResponse.json({ request: inserted });
+  const responseRequest = updateError ? inserted : updated;
+
+  if (process.env.RESEND_API_KEY && process.env.SUPPORT_FROM_EMAIL) {
+    try {
+      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(user.id);
+      const toEmail = authUser?.user?.email;
+      if (toEmail) {
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const footer = "\n\n---\nBackhaul (joinbackhaul.com)\nReply to this email if this didn't answer your question — a person will follow up.";
+        await resend.emails.send({
+          from: process.env.SUPPORT_FROM_EMAIL,
+          to: toEmail,
+          subject: `Re: ${subject}`,
+          text: decision.reply + footer,
+          replyTo: SUPPORT_REPLY_TO,
+        });
+      }
+    } catch (err) {
+      // Email is a bonus copy, not the source of truth — the customer
+      // already has the answer saved to their request above regardless.
+      console.error("Support auto-reply email failed:", err);
+    }
   }
 
-  return NextResponse.json({ request: updated });
+  return NextResponse.json({ request: responseRequest });
 }
