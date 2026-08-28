@@ -21,6 +21,13 @@ export default function SupportPage() {
   const [requests, setRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
 
+  // Per-request follow-up reply drafts, keyed by request id — lets a
+  // customer add another message to an existing request instead of only
+  // ever being able to submit a brand new one.
+  const [replyDrafts, setReplyDrafts] = useState({});
+  const [sendingReplyId, setSendingReplyId] = useState(null);
+  const [replyErrors, setReplyErrors] = useState({});
+
   useEffect(() => {
     checkAccess();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -48,12 +55,34 @@ export default function SupportPage() {
     setLoadingRequests(true);
     const { data } = await supabase
       .from("support_requests")
-      .select("*")
+      .select("*, support_messages(id, sender_role, body, created_at)")
       .eq("user_id", userId)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .order("created_at", { ascending: true, foreignTable: "support_messages" });
     setRequests(data || []);
     setLoadingRequests(false);
   }, [userId]);
+
+  async function sendFollowUp(requestId) {
+    const text = (replyDrafts[requestId] || "").trim();
+    if (!text) return;
+    setSendingReplyId(requestId);
+    setReplyErrors((prev) => ({ ...prev, [requestId]: "" }));
+    const headers = { ...(await authHeaders()), "Content-Type": "application/json" };
+    const res = await fetch(`/api/support/${requestId}/messages`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ message: text }),
+    });
+    const data = await res.json();
+    setSendingReplyId(null);
+    if (!res.ok) {
+      setReplyErrors((prev) => ({ ...prev, [requestId]: data.error || "Couldn't send your reply." }));
+      return;
+    }
+    setReplyDrafts((prev) => ({ ...prev, [requestId]: "" }));
+    loadRequests();
+  }
 
   useEffect(() => {
     loadRequests();
@@ -193,6 +222,51 @@ export default function SupportPage() {
                     <p className="text-xs text-gray-300 whitespace-pre-line">{r.ai_reply}</p>
                   </div>
                 )}
+                {(r.support_messages || []).map((m) => (
+                  <div
+                    key={m.id}
+                    className={
+                      "mt-2 rounded-md p-3 border " +
+                      (m.sender_role === "admin"
+                        ? "bg-slate-950 border-blue-900/40"
+                        : "bg-slate-950 border-slate-800")
+                    }
+                  >
+                    <p
+                      className={
+                        "text-[10px] uppercase tracking-wide font-semibold mb-1 " +
+                        (m.sender_role === "admin" ? "text-blue-400" : "text-gray-500")
+                      }
+                    >
+                      {m.sender_role === "admin" ? "Backhaul replied" : "You"}
+                    </p>
+                    <p className="text-xs text-gray-300 whitespace-pre-line">{m.body}</p>
+                  </div>
+                ))}
+                <div className="mt-3">
+                  <textarea
+                    value={replyDrafts[r.id] || ""}
+                    onChange={(e) => setReplyDrafts((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                    rows={2}
+                    placeholder={
+                      r.status === "resolved"
+                        ? "Add a follow-up — this will reopen the request"
+                        : "Add a follow-up message..."
+                    }
+                    className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded-md py-2 px-2.5 focus:outline-none focus:border-amber-500"
+                  />
+                  {replyErrors[r.id] && <p className="text-[11px] text-red-400 mt-1">{replyErrors[r.id]}</p>}
+                  <div className="flex justify-end mt-1.5">
+                    <button
+                      type="button"
+                      onClick={() => sendFollowUp(r.id)}
+                      disabled={sendingReplyId === r.id || !(replyDrafts[r.id] || "").trim()}
+                      className="text-[11px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white"
+                    >
+                      {sendingReplyId === r.id ? "Sending..." : "Reply"}
+                    </button>
+                  </div>
+                </div>
               </div>
             ))
           )}
