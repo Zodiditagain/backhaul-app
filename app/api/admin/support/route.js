@@ -28,9 +28,12 @@ export async function GET(req) {
 
   const { data, error } = await supabaseAdmin
     .from("support_requests")
-    .select("*, requester:profiles!support_requests_user_id_fkey(company_name, role)")
+    .select(
+      "*, requester:profiles!support_requests_user_id_fkey(company_name, role), support_messages(id, sender_role, body, created_at)"
+    )
     .order("priority", { ascending: false })
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: true, foreignTable: "support_messages" });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
