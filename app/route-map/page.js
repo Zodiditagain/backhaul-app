@@ -312,6 +312,7 @@ function RouteMapInner() {
     const scripts = [
       "https://js.api.here.com/v3/3.1/mapsjs-core.js",
       "https://js.api.here.com/v3/3.1/mapsjs-service.js",
+      "https://js.api.here.com/v3/3.1/mapsjs-harp.js",
       "https://js.api.here.com/v3/3.1/mapsjs-ui.js",
       "https://js.api.here.com/v3/3.1/mapsjs-mapevents.js",
     ];
@@ -339,8 +340,21 @@ function RouteMapInner() {
     const apikey = process.env.NEXT_PUBLIC_HERE_MAPS_KEY;
     const platform = new H.service.Platform({ apikey });
     platformRef.current = platform;
-    const defaultLayers = platform.createDefaultLayers();
+    // Base map runs on HERE's vector ("HARP") rendering engine rather than
+    // pre-rendered raster tiles — raster tiles are flat images baked
+    // north-up server-side and can't rotate/tilt no matter what we tell the
+    // view model, which is why heading-up navigation and the manual
+    // rotate/reset-to-north compass buttons below were previously inert.
+    // Vector tiles are decoded and drawn client-side, so the view can
+    // actually rotate and tilt with the truck's heading during navigation.
+    const engineType = H.Map.EngineType["HARP"];
+    const pixelRatio = window.devicePixelRatio || 1;
+    const defaultLayers = platform.createDefaultLayers({ engineType, pixelRatio });
     defaultLayersRef.current = defaultLayers;
+    // Satellite imagery has no vector equivalent (it's a photograph, not
+    // vector data) — this stays a raster tile layer, swapped in as the base
+    // layer on toggle exactly as before. HARP-engine maps can display a
+    // raster base layer same as a vector one, so this needed no changes.
     const satelliteTileService = platform.getRasterTileService({
       queryParams: {
         style: "satellite.day",
@@ -352,21 +366,17 @@ function RouteMapInner() {
       tileSize: 512,
     });
     satelliteLayerRef.current = new H.map.layer.TileLayer(satelliteTileProvider);
-    const exploreTileService = platform.getRasterTileService({
-      queryParams: {
-        style: "explore.day",
-        size: "512",
-        ppi: 400,
-      },
-    });
-    const exploreTileProvider = new H.service.rasterTile.Provider(exploreTileService, {
-      tileSize: 512,
-    });
-    exploreLayerRef.current = new H.map.layer.TileLayer(exploreTileProvider);
+    // Standard ("explore") base layer is now HERE's default vector normal
+    // map instead of the old custom "explore.day" raster style — this is
+    // what unlocks rotation. The visual style is HERE's own default vector
+    // theme, which looks slightly different from the old custom raster
+    // style but is the same category of everyday street map.
+    exploreLayerRef.current = defaultLayers.vector.normal.map;
     const map = new H.Map(mapRef.current, exploreLayerRef.current, {
+      engineType,
       center: { lat: 39.8283, lng: -98.5795 },
       zoom: 4,
-      pixelRatio: window.devicePixelRatio || 1,
+      pixelRatio,
     });
     new H.mapevents.Behavior(new H.mapevents.MapEvents(map));
     uiRef.current = H.ui.UI.createDefault(map, defaultLayers);
