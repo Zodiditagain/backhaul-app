@@ -157,6 +157,7 @@ function RouteMapInner() {
   const [followMode, setFollowMode] = useState(true);
   const [currentPosition, setCurrentPosition] = useState(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [distanceToManeuver, setDistanceToManeuver] = useState(null);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [navError, setNavError] = useState("");
   const [isRerouting, setIsRerouting] = useState(false);
@@ -168,6 +169,8 @@ function RouteMapInner() {
   const mapObjectsGroup = useRef(null);
   const poiMarkersGroup = useRef(null);
   const truckMarkerRef = useRef(null);
+  const truckIconHeadingRef = useRef(null);
+  const truckHeadingRef = useRef(0);
   const originMarkerRef = useRef(null);
   const decodedPointsRef = useRef([]);
   const cumulativeDistancesRef = useRef([]);
@@ -744,21 +747,44 @@ function RouteMapInner() {
     fetchAndShowPois(poiTypes);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [poiTypes, routeResult]);
-  function updateTruckMarker(lat, lng) {
+  // Top-down vehicle glyph (body + windshield) instead of a plain arrowhead,
+  // rotated to match the truck's true GPS heading — 0deg points up (north),
+  // rotating clockwise, same convention as pos.coords.heading/bearingDegrees.
+  // The shadow/glow behind it stays unrotated since both are circular.
+  function buildTruckIcon(H, heading) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
+      <ellipse cx="17" cy="19" rx="12" ry="10" fill="black" opacity="0.18"/>
+      <circle cx="17" cy="17" r="14" fill="#3b82f6" opacity="0.25"/>
+      <g transform="rotate(${heading} 17 17)">
+        <rect x="10" y="8" width="14" height="18" rx="4" fill="#3b82f6" stroke="white" stroke-width="2"/>
+        <rect x="12.5" y="11" width="9" height="6" rx="1.5" fill="white" opacity="0.85"/>
+      </g>
+    </svg>`;
+    return new H.map.Icon(svg, { size: { w: 34, h: 34 }, anchor: { x: 17, y: 17 } });
+  }
+  function headingDelta(a, b) {
+    let d = Math.abs(a - b) % 360;
+    return d > 180 ? 360 - d : d;
+  }
+  function updateTruckMarker(lat, lng, heading = 0) {
     const H = window.H;
     const map = mapInstance.current;
     if (!H || !map) return;
+    const roundedHeading = Math.round(heading);
     if (!truckMarkerRef.current) {
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
-        <ellipse cx="17" cy="19" rx="12" ry="10" fill="black" opacity="0.18"/>
-        <circle cx="17" cy="17" r="14" fill="#3b82f6" opacity="0.25"/>
-        <path d="M17 5 L26 27 L17 21 L8 27 Z" fill="#3b82f6" stroke="white" stroke-width="2.5" stroke-linejoin="round"/>
-      </svg>`;
-      const icon = new H.map.Icon(svg, { size: { w: 34, h: 34 }, anchor: { x: 17, y: 17 } });
-      truckMarkerRef.current = new H.map.Marker({ lat, lng }, { icon });
+      truckMarkerRef.current = new H.map.Marker({ lat, lng }, { icon: buildTruckIcon(H, roundedHeading) });
+      truckIconHeadingRef.current = roundedHeading;
       map.addObject(truckMarkerRef.current);
     } else {
       truckMarkerRef.current.setGeometry({ lat, lng });
+      // Rebuilding the icon on every single GPS tick would work but is
+      // wasted SVG-parsing churn — only redraw once the heading has
+      // actually turned enough to be visible (a few degrees).
+      const prevHeading = truckIconHeadingRef.current;
+      if (prevHeading === null || headingDelta(roundedHeading, prevHeading) >= 4) {
+        truckMarkerRef.current.setIcon(buildTruckIcon(H, roundedHeading));
+        truckIconHeadingRef.current = roundedHeading;
+      }
     }
   }
   function speak(text) {
@@ -777,7 +803,10 @@ function RouteMapInner() {
   function checkForAnnouncement(lat, lng) {
     const idx = currentStepIndexRef.current;
     const pts = actionPointsRef.current;
-    if (idx >= pts.length) return;
+    if (idx >= pts.length) {
+      setDistanceToManeuver(null);
+      return;
+    }
     const step = pts[idx];
     if (step.lat == null || step.lng == null) {
       currentStepIndexRef.current = idx + 1;
@@ -786,6 +815,10 @@ function RouteMapInner() {
     }
     const myAlong = projectPositionAlongRoute(lat, lng);
     const dist = step.distAlongRoute - myAlong;
+    // Live countdown to the upcoming maneuver — distinct from the static
+    // "Go for 1.8 mi" phrasing baked into step.instruction by HERE's routing
+    // API at route-calc time, which never updates as you actually drive.
+    setDistanceToManeuver(Math.max(0, dist));
     const stageState = announceStagesRef.current[idx] || {};
     if (dist <= FAR_ANNOUNCE_METERS && dist > NEAR_ANNOUNCE_METERS && !stageState.far) {
       speak(`In a half mile, ${buildTurnPhrase(step)}.`);
@@ -935,9 +968,12 @@ function RouteMapInner() {
     if ((typeof heading !== "number" || isNaN(heading)) && movedMeters !== null && movedMeters > 8) {
       heading = bearingDegrees(prev.lat, prev.lng, lat, lng);
     }
+    if (typeof heading === "number" && !isNaN(heading)) {
+      truckHeadingRef.current = heading;
+    }
     lastPositionRef.current = { lat, lng };
     setCurrentPosition({ lat, lng });
-    updateTruckMarker(lat, lng);
+    updateTruckMarker(lat, lng, truckHeadingRef.current);
     if (followModeRef.current && mapInstance.current) {
       const viewModel = mapInstance.current.getViewModel();
       const lookAt = { position: { lat, lng } };
@@ -975,6 +1011,7 @@ function RouteMapInner() {
     setIsNavigating(true);
     setFollowMode(true);
     setCurrentStepIndex(0);
+    setDistanceToManeuver(null);
     lastRerouteRef.current = 0;
     offRouteStreakRef.current = 0;
     lastPositionRef.current = null;
@@ -994,6 +1031,8 @@ function RouteMapInner() {
     setIsNavigating(false);
     setIsRerouting(false);
     setCurrentPosition(null);
+    setDistanceToManeuver(null);
+    truckIconHeadingRef.current = null;
     if (truckMarkerRef.current && mapInstance.current) {
       mapInstance.current.removeObject(truckMarkerRef.current);
       truckMarkerRef.current = null;
@@ -1046,6 +1085,14 @@ function RouteMapInner() {
   function formatDistance(meters) {
     const miles = meters / 1609.34;
     return `${miles.toFixed(1)} mi`;
+  }
+  // Live "distance to next turn" — feet once you're close in, matching how
+  // Google/Waze-style nav switches units for a maneuver that's imminent.
+  function formatManeuverDistance(meters) {
+    if (meters < 160) {
+      return `${Math.round(meters * 3.28084)} ft`;
+    }
+    return formatDistance(meters);
   }
   function formatDuration(seconds) {
     const hours = Math.floor(seconds / 3600);
@@ -1344,6 +1391,11 @@ function RouteMapInner() {
                 <p className="text-lg font-semibold text-white leading-snug">
                   {currentStep.instruction}
                 </p>
+                {distanceToManeuver != null && (
+                  <p className={`text-sm font-medium mt-1 ${currentStep.actionType === "arrive" ? "text-violet-100" : "text-blue-100"}`}>
+                    {formatManeuverDistance(distanceToManeuver)} to go
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => setReportModalOpen(true)}
