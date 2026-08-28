@@ -11,6 +11,13 @@ export default function AdminSupportPage() {
   const [busyId, setBusyId] = useState(null);
   const [statusFilter, setStatusFilter] = useState("open");
 
+  // Per-request reply drafts, keyed by request id — lets an admin reply
+  // into a ticket's thread independent of the separate resolve/reopen
+  // action below.
+  const [replyDrafts, setReplyDrafts] = useState({});
+  const [sendingReplyId, setSendingReplyId] = useState(null);
+  const [replyErrors, setReplyErrors] = useState({});
+
   const loadRequests = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -40,6 +47,27 @@ export default function AdminSupportPage() {
     });
     await loadRequests();
     setBusyId(null);
+  }
+
+  async function sendReply(requestId) {
+    const text = (replyDrafts[requestId] || "").trim();
+    if (!text) return;
+    setSendingReplyId(requestId);
+    setReplyErrors((prev) => ({ ...prev, [requestId]: "" }));
+    const headers = { ...(await authHeaders()), "Content-Type": "application/json" };
+    const res = await fetch(`/api/admin/support/${requestId}/messages`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ message: text }),
+    });
+    const data = await res.json();
+    setSendingReplyId(null);
+    if (!res.ok) {
+      setReplyErrors((prev) => ({ ...prev, [requestId]: data.error || "Couldn't send that reply." }));
+      return;
+    }
+    setReplyDrafts((prev) => ({ ...prev, [requestId]: "" }));
+    loadRequests();
   }
 
   const filtered = requests.filter((r) => statusFilter === "all" || r.status === statusFilter);
@@ -120,6 +148,47 @@ export default function AdminSupportPage() {
                         <p className="text-xs text-gray-300 whitespace-pre-line">{r.ai_reply}</p>
                       </div>
                     )}
+                    {(r.support_messages || []).map((m) => (
+                      <div
+                        key={m.id}
+                        className={
+                          "mt-2 rounded-md p-2.5 max-w-2xl border " +
+                          (m.sender_role === "admin"
+                            ? "bg-slate-950 border-blue-900/40"
+                            : "bg-slate-950 border-slate-800")
+                        }
+                      >
+                        <p
+                          className={
+                            "text-[10px] uppercase tracking-wide font-semibold mb-1 " +
+                            (m.sender_role === "admin" ? "text-blue-400" : "text-gray-500")
+                          }
+                        >
+                          {m.sender_role === "admin" ? "Staff reply" : "Customer follow-up"}
+                        </p>
+                        <p className="text-xs text-gray-300 whitespace-pre-line">{m.body}</p>
+                      </div>
+                    ))}
+                    <div className="mt-2.5 max-w-2xl">
+                      <textarea
+                        value={replyDrafts[r.id] || ""}
+                        onChange={(e) => setReplyDrafts((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                        rows={2}
+                        placeholder="Reply to this request..."
+                        className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded-md py-2 px-2.5 focus:outline-none focus:border-amber-500"
+                      />
+                      {replyErrors[r.id] && <p className="text-[11px] text-red-400 mt-1">{replyErrors[r.id]}</p>}
+                      <div className="flex justify-end mt-1.5">
+                        <button
+                          type="button"
+                          onClick={() => sendReply(r.id)}
+                          disabled={sendingReplyId === r.id || !(replyDrafts[r.id] || "").trim()}
+                          className="text-[11px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white"
+                        >
+                          {sendingReplyId === r.id ? "Sending..." : "Send Reply"}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {r.status === "resolved" ? (
