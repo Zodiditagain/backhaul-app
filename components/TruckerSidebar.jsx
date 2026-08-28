@@ -251,7 +251,7 @@ function SidebarContent({ collapsed, onToggleCollapse, onClose, groups, isActive
           return (
             <div key={gi}>
               {group.title && !collapsed && (
-                <p className="px-3 mb-1.5 text-[11px] font-bold uppercase tracking-widest text-slate-200">
+                <p className="px-3 mb-1.5 text-[11px] font-bold uppercase tracking-widest text-blue-300">
                   {group.title}
                 </p>
               )}
