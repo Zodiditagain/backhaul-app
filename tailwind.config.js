@@ -9,6 +9,10 @@ module.exports = {
       colors: {
         concrete: "#4A4A4A",
         asphalt: "#1E1E1E",
+        amberx: "#F59E0B",
+        alertred: "#EF4444",
+        steelgray: "#9CA3AF",
+        highway: "#22C55E",
       },
     },
   },
