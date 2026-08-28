@@ -169,7 +169,7 @@ export default function SupportPage() {
             <p className="text-xs text-green-400 flex items-center gap-1.5">
               <CheckCircle2 size={13} />
               {autoAnswered
-                ? "Answered instantly — check your email and the list below."
+                ? "Answered instantly — see the reply in the list below."
                 : "Request sent — we'll be in touch soon."}
             </p>
           )}
