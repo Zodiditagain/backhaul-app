@@ -352,20 +352,19 @@ function RouteMapInner() {
     const defaultLayers = platform.createDefaultLayers({ engineType, pixelRatio });
     defaultLayersRef.current = defaultLayers;
     // Satellite imagery has no vector equivalent (it's a photograph, not
-    // vector data) — this stays a raster tile layer, swapped in as the base
-    // layer on toggle exactly as before. HARP-engine maps can display a
-    // raster base layer same as a vector one, so this needed no changes.
-    const satelliteTileService = platform.getRasterTileService({
-      queryParams: {
-        style: "satellite.day",
-        size: "512",
-        ppi: 400,
-      },
-    });
-    const satelliteTileProvider = new H.service.rasterTile.Provider(satelliteTileService, {
-      tileSize: 512,
-    });
-    satelliteLayerRef.current = new H.map.layer.TileLayer(satelliteTileProvider);
+    // vector data), so it still comes in as a raster layer — but it must be
+    // the raster layer HERE hands back from this same engine-aware
+    // createDefaultLayers({ engineType, pixelRatio }) call above, not a
+    // stand-alone one built by hand from platform.getRasterTileService() +
+    // H.service.rasterTile.Provider. That manual construction is how this
+    // worked back when the map ran on the plain raster engine, but once the
+    // base map is locked to the HARP engine (for rotation/tilt, see below),
+    // a hand-built raster TileLayer isn't wired to the HARP renderer and
+    // silently fails to draw when swapped in as the base layer — which is
+    // why toggling to Satellite stopped showing anything. defaultLayers's
+    // own raster.satellite.map is produced through the same engineType, so
+    // it's the one that actually renders here.
+    satelliteLayerRef.current = defaultLayers.raster.satellite.map;
     // Standard ("explore") base layer is now HERE's default vector normal
     // map instead of the old custom "explore.day" raster style — this is
     // what unlocks rotation. The visual style is HERE's own default vector
