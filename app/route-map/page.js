@@ -158,6 +158,7 @@ function RouteMapInner() {
   const [currentPosition, setCurrentPosition] = useState(null);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [distanceToManeuver, setDistanceToManeuver] = useState(null);
+  const [currentSpeedMph, setCurrentSpeedMph] = useState(null);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [navError, setNavError] = useState("");
   const [isRerouting, setIsRerouting] = useState(false);
@@ -980,7 +981,21 @@ function RouteMapInner() {
     if (typeof heading === "number" && !isNaN(heading)) {
       truckHeadingRef.current = heading;
     }
-    lastPositionRef.current = { lat, lng };
+    // Speed readout: prefer the GPS fix's own speed (coords.speed, in m/s)
+    // when the device reports one — most phones do this while actually
+    // moving. Some browsers/devices only report it intermittently or never
+    // at all, so fall back to distance-over-time between this fix and the
+    // last one rather than just leaving the readout blank.
+    const MPS_TO_MPH = 2.23694;
+    if (typeof pos.coords.speed === "number" && !isNaN(pos.coords.speed) && pos.coords.speed >= 0) {
+      setCurrentSpeedMph(pos.coords.speed * MPS_TO_MPH);
+    } else if (prev?.t && movedMeters !== null) {
+      const dtSeconds = (pos.timestamp - prev.t) / 1000;
+      if (dtSeconds > 0.5) {
+        setCurrentSpeedMph((movedMeters / dtSeconds) * MPS_TO_MPH);
+      }
+    }
+    lastPositionRef.current = { lat, lng, t: pos.timestamp };
     setCurrentPosition({ lat, lng });
     updateTruckMarker(lat, lng, truckHeadingRef.current);
     if (followModeRef.current && mapInstance.current) {
@@ -1021,6 +1036,7 @@ function RouteMapInner() {
     setFollowMode(true);
     setCurrentStepIndex(0);
     setDistanceToManeuver(null);
+    setCurrentSpeedMph(null);
     lastRerouteRef.current = 0;
     offRouteStreakRef.current = 0;
     lastPositionRef.current = null;
@@ -1041,6 +1057,7 @@ function RouteMapInner() {
     setIsRerouting(false);
     setCurrentPosition(null);
     setDistanceToManeuver(null);
+    setCurrentSpeedMph(null);
     truckIconHeadingRef.current = null;
     if (truckMarkerRef.current && mapInstance.current) {
       mapInstance.current.removeObject(truckMarkerRef.current);
@@ -1111,6 +1128,11 @@ function RouteMapInner() {
   }
   const hasTruckProfile = !!selectedProfile;
   const currentStep = actionPoints[currentStepIndex];
+  // The maneuver right after the current one — this is what lets the
+  // "Keep right onto I-75 S, go for 14.7 mi" screen also surface the actual
+  // exit you'll eventually take off that highway, instead of only ever
+  // showing the immediate instruction.
+  const nextStep = actionPoints[currentStepIndex + 1];
   if (checkingAccess) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6">
@@ -1405,6 +1427,18 @@ function RouteMapInner() {
                     {formatManeuverDistance(distanceToManeuver)} to go
                   </p>
                 )}
+                {nextStep && (
+                  <p
+                    className={`text-sm mt-2 pt-2 border-t ${
+                      currentStep.actionType === "arrive"
+                        ? "border-violet-400/40 text-violet-100"
+                        : "border-blue-400/40 text-blue-100"
+                    }`}
+                  >
+                    <span className="font-semibold uppercase tracking-wide text-xs mr-1.5">Then</span>
+                    {nextStep.instruction}
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => setReportModalOpen(true)}
@@ -1553,6 +1587,12 @@ function RouteMapInner() {
             ref={mapRef}
             className="w-full h-[500px] rounded-md border border-slate-800 bg-slate-900"
           />
+          {isNavigating && currentSpeedMph !== null && (
+            <div className="absolute top-3 left-3 z-10 bg-slate-900/90 border border-slate-700 rounded-md shadow-lg px-3 py-1.5 flex flex-col items-center leading-none">
+              <span className="text-2xl font-bold text-white">{Math.round(currentSpeedMph)}</span>
+              <span className="text-[9px] text-gray-400 font-semibold uppercase tracking-wide mt-0.5">mph</span>
+            </div>
+          )}
           <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
             <button
               onClick={toggleSatelliteView}
