@@ -1,8 +1,36 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, LifeBuoy, Loader2, CheckCircle2, RotateCcw, Sparkles } from "lucide-react";
-import { authHeaders } from "../../../lib/supabaseClient";
+import { ArrowLeft, LifeBuoy, Loader2, CheckCircle2, RotateCcw, Sparkles, Bell, BellOff } from "lucide-react";
+import { supabase, authHeaders } from "../../../lib/supabaseClient";
+
+// Plays a short two-tone alert entirely with the Web Audio API — no sound
+// file to host or load, just two quick beeps synthesized on the spot.
+function playAlertSound(audioCtxRef) {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    if (!audioCtxRef.current) audioCtxRef.current = new AudioCtx();
+    const ctx = audioCtxRef.current;
+    const now = ctx.currentTime;
+    [880, 660].forEach((freq, i) => {
+      const start = now + i * 0.18;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.3, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.16);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.18);
+    });
+  } catch {
+    // sound is a bonus, never worth breaking the page over
+  }
+}
 
 export default function AdminSupportPage() {
   const [requests, setRequests] = useState([]);
@@ -17,6 +45,39 @@ export default function AdminSupportPage() {
   const [replyDrafts, setReplyDrafts] = useState({});
   const [sendingReplyId, setSendingReplyId] = useState(null);
   const [replyErrors, setReplyErrors] = useState({});
+
+  // Sound alerts default off — browsers block audio until there's been a
+  // real click on the page, so this starts muted and the Bell button below
+  // is what both turns it on AND satisfies that click requirement at the
+  // same time. Remembered across visits via localStorage.
+  const [soundEnabled, setSoundEnabled] = useState(false);
+  const soundEnabledRef = useRef(false);
+  const audioCtxRef = useRef(null);
+
+  useEffect(() => {
+    soundEnabledRef.current = soundEnabled;
+  }, [soundEnabled]);
+
+  useEffect(() => {
+    setSoundEnabled(window.localStorage.getItem("backhaul_admin_support_sound") === "on");
+  }, []);
+
+  function toggleSound() {
+    setSoundEnabled((prev) => {
+      const next = !prev;
+      window.localStorage.setItem("backhaul_admin_support_sound", next ? "on" : "off");
+      // Creating/resuming the AudioContext here, inside a real click
+      // handler, is what lets later sounds play without the browser
+      // silently blocking them.
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (next && AudioCtx) {
+        if (!audioCtxRef.current) audioCtxRef.current = new AudioCtx();
+        if (audioCtxRef.current.state === "suspended") audioCtxRef.current.resume();
+        playAlertSound(audioCtxRef);
+      }
+      return next;
+    });
+  }
 
   const loadRequests = useCallback(async () => {
     setLoading(true);
@@ -36,6 +97,37 @@ export default function AdminSupportPage() {
   useEffect(() => {
     loadRequests();
   }, [loadRequests]);
+
+  // Live updates: Supabase Realtime pushes new support requests and new
+  // customer follow-up messages the instant they're inserted, so this page
+  // doesn't need a manual reload to notice them.
+  useEffect(() => {
+    const channel = supabase
+      .channel("admin-support-live")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "support_requests" },
+        () => {
+          if (soundEnabledRef.current) playAlertSound(audioCtxRef);
+          loadRequests();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "support_messages" },
+        (payload) => {
+          if (payload.new?.sender_role === "user") {
+            if (soundEnabledRef.current) playAlertSound(audioCtxRef);
+            loadRequests();
+          }
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function setStatus(id, action) {
     setBusyId(id);
@@ -90,20 +182,39 @@ export default function AdminSupportPage() {
           Priority requests (from Broker/Vendor accounts) are sorted to the top automatically.
         </p>
 
-        <div className="flex items-center gap-2 mb-4">
-          {["open", "resolved", "all"].map((s) => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={`text-xs font-semibold uppercase tracking-wide px-3 py-1.5 rounded-md border ${
-                statusFilter === s
-                  ? "bg-amber-600 border-amber-600 text-white"
-                  : "bg-slate-900 border-slate-800 text-gray-400 hover:text-white"
-              }`}
-            >
-              {s}
-            </button>
-          ))}
+        <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            {["open", "resolved", "all"].map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`text-xs font-semibold uppercase tracking-wide px-3 py-1.5 rounded-md border ${
+                  statusFilter === s
+                    ? "bg-amber-600 border-amber-600 text-white"
+                    : "bg-slate-900 border-slate-800 text-gray-400 hover:text-white"
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={toggleSound}
+            title={
+              soundEnabled
+                ? "Sound alerts on — click to mute"
+                : "Click to enable a sound alert for new support requests"
+            }
+            className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide px-3 py-1.5 rounded-md border ${
+              soundEnabled
+                ? "bg-green-500/15 border-green-500/40 text-green-400"
+                : "bg-slate-900 border-slate-800 text-gray-400 hover:text-white"
+            }`}
+          >
+            {soundEnabled ? <Bell size={14} /> : <BellOff size={14} />}
+            Sound Alerts {soundEnabled ? "On" : "Off"}
+          </button>
         </div>
 
         {error && <p className="text-xs text-red-400 mb-4">{error}</p>}
