@@ -53,7 +53,7 @@ export default function Login() {
     }
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role, onboarding_completed, company_name")
+      .select("role, onboarding_completed, company_name, is_admin")
       .eq("id", data.user.id)
       .single();
 
@@ -67,7 +67,13 @@ export default function Login() {
     });
 
     setLoading(false);
-    if (profile?.role === "trucker" && !profile.onboarding_completed) {
+    if (profile?.is_admin) {
+      // Employee/admin accounts (created via an invite link) skip the
+      // trucker/broker onboarding flow entirely and land straight in the
+      // admin console — there's no "company" onboarding step relevant to
+      // an internal account.
+      router.push("/admin");
+    } else if (profile?.role === "trucker" && !profile.onboarding_completed) {
       router.push("/onboarding");
     } else if ((profile?.role === "broker" || profile?.role === "vendor") && !profile.onboarding_completed) {
       router.push("/onboarding-partner");
