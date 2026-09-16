@@ -24,7 +24,7 @@ export default function TermsOfServicePage() {
           <h1 className="text-2xl font-bold text-white">Terms of Service</h1>
         </div>
 
-        <p className="text-xs text-gray-500 mb-8">Last updated: August 16, 2026</p>
+        <p className="text-xs text-gray-500 mb-8">Last updated: September 16, 2026</p>
 
         <div className="space-y-7 text-sm text-gray-300 leading-relaxed">
           <Section title="1. Agreement to these Terms">
@@ -91,7 +91,32 @@ export default function TermsOfServicePage() {
             </p>
           </Section>
 
-          <Section title="5. User content and conduct">
+          <Section title="5. Intellectual property">
+            <p className="mb-2">
+              The Service itself — including its software and source code, design, layout,
+              graphics, and all text, logos, and other content we create or provide (not including
+              User Content, which is covered separately below) — is owned by{" "}
+              <span className="text-gray-500">[Legal Entity Name]</span> and is protected by
+              copyright, trademark, and other intellectual property laws.{" "}
+              <span className="text-gray-200">
+                "Backhaul," the Backhaul logo, and joinbackhaul.com are our trademarks, and nothing
+                in these Terms grants you any right to use them.
+              </span>
+            </p>
+            <p className="mb-2">
+              Subject to your compliance with these Terms, we grant you a limited, non-exclusive,
+              non-transferable, revocable license to access and use the Service for its intended
+              purpose while your account is active and in good standing. This license is personal
+              to you and does not give you any ownership interest in the Service.
+            </p>
+            <p>
+              Except as this license expressly allows, you may not copy, reproduce, distribute,
+              modify, create derivative works from, scrape, reverse-engineer, decompile, or resell
+              any part of the Service.
+            </p>
+          </Section>
+
+          <Section title="6. User content and conduct">
             <p className="mb-2">
               You are solely responsible for the accuracy of information you submit to the
               Service, including profile details, Bills of Lading, shipment and rate information,
@@ -110,7 +135,7 @@ export default function TermsOfServicePage() {
             </ul>
           </Section>
 
-          <Section title="6. Relationship between users">
+          <Section title="7. Relationship between users">
             <p>
               Any negotiation, rate agreement, contract of carriage, load tender, or dispute
               between a trucker, broker, or vendor arising from use of the Service is solely
@@ -125,7 +150,7 @@ export default function TermsOfServicePage() {
             </p>
           </Section>
 
-          <Section title="7. Location and navigation features">
+          <Section title="8. Location and navigation features">
             <p>
               Route Map provides truck-legal routing and turn-by-turn navigation based on data
               from third-party mapping providers and truck specifications you provide.{" "}
@@ -138,7 +163,7 @@ export default function TermsOfServicePage() {
             </p>
           </Section>
 
-          <Section title="8. Market Pulse rate data">
+          <Section title="9. Market Pulse rate data">
             <p>
               Market Pulse rate estimates — including figures not marked "Live" — are
               illustrative estimates intended to assist negotiation and are not a guarantee of any
@@ -149,7 +174,7 @@ export default function TermsOfServicePage() {
             </p>
           </Section>
 
-          <Section title="9. Disclaimers">
+          <Section title="10. Disclaimers">
             <p className="uppercase text-xs tracking-wide text-gray-500 mb-2">
               To the maximum extent permitted by law:
             </p>
@@ -162,7 +187,7 @@ export default function TermsOfServicePage() {
             </p>
           </Section>
 
-          <Section title="10. Limitation of liability">
+          <Section title="11. Limitation of liability">
             <p>
               To the maximum extent permitted by law, Backhaul and its officers, employees, and
               affiliates will not be liable for any indirect, incidental, special, consequential,
@@ -173,7 +198,7 @@ export default function TermsOfServicePage() {
             </p>
           </Section>
 
-          <Section title="11. Indemnification">
+          <Section title="12. Indemnification">
             <p>
               You agree to indemnify and hold Backhaul harmless from any claims, damages, losses,
               and expenses (including reasonable attorneys' fees) arising from your use of the
@@ -182,7 +207,7 @@ export default function TermsOfServicePage() {
             </p>
           </Section>
 
-          <Section title="12. Termination">
+          <Section title="13. Termination">
             <p>
               You may stop using the Service and close your account at any time. We may suspend or
               terminate your access to the Service if we reasonably believe you have violated
@@ -191,7 +216,7 @@ export default function TermsOfServicePage() {
             </p>
           </Section>
 
-          <Section title="13. Governing law and disputes">
+          <Section title="14. Governing law and disputes">
             <p>
               These Terms are governed by the laws of{" "}
               <span className="text-gray-500">[State]</span>, without regard to conflict-of-law
@@ -202,7 +227,7 @@ export default function TermsOfServicePage() {
             </p>
           </Section>
 
-          <Section title="14. Changes to these Terms">
+          <Section title="15. Changes to these Terms">
             <p>
               We may update these Terms from time to time. If we make material changes, we will
               update the "Last updated" date above and, where appropriate, provide additional
@@ -211,7 +236,7 @@ export default function TermsOfServicePage() {
             </p>
           </Section>
 
-          <Section title="15. Contact">
+          <Section title="16. Contact">
             <p>
               Questions about these Terms can be sent to{" "}
               <span className="text-blue-400">legal@joinbackhaul.com</span>.
