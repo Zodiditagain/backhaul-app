@@ -251,6 +251,17 @@ export default function DriversPage() {
                   <p className="text-[11px] text-gray-500">
                     Joined {new Date(driver.created_at).toLocaleDateString()}
                   </p>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    {driver.currentTruck ? (
+                      <>
+                        Currently running: {driver.currentTruck.profile_name}
+                        {driver.currentTruck.truck_number && ` — Truck #${driver.currentTruck.truck_number}`}
+                        {driver.currentTruck.trailer_number && ` / Trailer #${driver.currentTruck.trailer_number}`}
+                      </>
+                    ) : (
+                      <span className="text-gray-600">Not currently assigned to a truck</span>
+                    )}
+                  </p>
                 </div>
                 <button
                   type="button"
