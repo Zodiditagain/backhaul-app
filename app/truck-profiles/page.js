@@ -42,6 +42,8 @@ const TUNNEL_CATEGORIES = ["B", "C", "D", "E"];
 
 const EMPTY_FORM = {
   profile_name: "",
+  truck_number: "",
+  trailer_number: "",
   vehicle_type: "tractor_trailer",
   heightFt: "",
   heightIn: "",
@@ -149,6 +151,8 @@ export default function TruckProfilesPage() {
     const tl = splitInches(p.trailer_length_inches);
     setForm({
       profile_name: p.profile_name || "",
+      truck_number: p.truck_number || "",
+      trailer_number: p.trailer_number || "",
       vehicle_type: p.vehicle_type || "tractor_trailer",
       heightFt: h.ft,
       heightIn: h.in,
@@ -211,6 +215,8 @@ export default function TruckProfilesPage() {
     const payload = {
       user_id: user.id,
       profile_name: form.profile_name.trim(),
+      truck_number: form.truck_number.trim() || null,
+      trailer_number: form.trailer_number.trim() || null,
       vehicle_type: form.vehicle_type,
       height_inches: totalInches(form.heightFt, form.heightIn),
       width_inches: totalInches(form.widthFt, form.widthIn),
@@ -353,6 +359,31 @@ export default function TruckProfilesPage() {
                 placeholder="2025 Freightliner + 53' Dry Van"
                 className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-white placeholder-gray-600"
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">
+                  Truck # (optional)
+                </label>
+                <input
+                  value={form.truck_number}
+                  onChange={(e) => setForm({ ...form, truck_number: e.target.value })}
+                  placeholder="e.g. 12"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-white placeholder-gray-600"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">
+                  Trailer # (optional)
+                </label>
+                <input
+                  value={form.trailer_number}
+                  onChange={(e) => setForm({ ...form, trailer_number: e.target.value })}
+                  placeholder="e.g. 45"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-white placeholder-gray-600"
+                />
+              </div>
             </div>
 
             <div>
@@ -590,6 +621,14 @@ export default function TruckProfilesPage() {
                 </div>
                 <p className="text-xs text-gray-500">
                   {VEHICLE_TYPES.find((t) => t.value === p.vehicle_type)?.label || p.vehicle_type}
+                  {(p.truck_number || p.trailer_number) && (
+                    <span className="text-gray-600">
+                      {" · "}
+                      {p.truck_number && `Truck #${p.truck_number}`}
+                      {p.truck_number && p.trailer_number && " / "}
+                      {p.trailer_number && `Trailer #${p.trailer_number}`}
+                    </span>
+                  )}
                 </p>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-gray-400">
                   {p.height_inches && <span>H: {formatFeetInches(p.height_inches)}</span>}
