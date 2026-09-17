@@ -16,6 +16,7 @@ import {
   LifeBuoy,
   Newspaper,
   Shield,
+  Users,
   LogOut,
   Menu,
   X,
@@ -122,6 +123,7 @@ export default function TruckerSidebar({ user, profile, title = "Overview", chil
       items: [
         { href: "/carrier-profile", label: "Carrier Profile", icon: User },
         { href: "/truck-profiles", label: "Truck & Equipment", icon: Wrench },
+        { href: "/drivers", label: "Drivers", icon: Users },
       ],
     },
     {
