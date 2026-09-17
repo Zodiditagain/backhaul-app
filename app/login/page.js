@@ -57,6 +57,23 @@ export default function Login() {
       .eq("id", data.user.id)
       .single();
 
+    // Driver accounts are a fully separate, restricted flow — they land on
+    // their own minimal page below, never the trucker onboarding/dashboard
+    // path, since drivers have no access to matches/messages/brokers.
+    if (profile?.role === "driver") {
+      await logAuditEvent({
+        actorId: data.user.id,
+        actorRole: "driver",
+        companyName: profile?.company_name || null,
+        eventType: "login",
+        action: "Login",
+        status: "success",
+      });
+      setLoading(false);
+      router.push("/driver-home");
+      return;
+    }
+
     await logAuditEvent({
       actorId: data.user.id,
       actorRole: profile?.role || null,
