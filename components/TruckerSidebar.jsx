@@ -50,6 +50,16 @@ export default function TruckerSidebar({ user, profile, title = "Overview", chil
   const [mobileOpen, setMobileOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
 
+  // Every page that renders this shell is trucker-company-only business
+  // (loads, documents, truck specs, drivers, etc.) — a driver account has
+  // none of its own, so rather than let each page show a confusing empty
+  // state, catch it once here and send drivers back to their own page.
+  useEffect(() => {
+    if (profile?.role === "driver") {
+      router.replace("/driver-home");
+    }
+  }, [profile?.role, router]);
+
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
@@ -148,6 +158,16 @@ export default function TruckerSidebar({ user, profile, title = "Overview", chil
       items: [{ href: "/admin", label: "Admin", icon: Shield }],
     },
   ];
+
+  // Redirect is in flight (see the effect above) — show nothing instead of
+  // a flash of trucker-only content and empty data.
+  if (profile?.role === "driver") {
+    return (
+      <div className="min-h-screen bg-[#0b1220] flex items-center justify-center px-6">
+        <p className="text-gray-400 text-sm">Redirecting...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0b1220]">
