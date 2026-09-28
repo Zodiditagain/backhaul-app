@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { Send, Star, CheckCircle2, FileText, X, Upload, Camera, Paperclip, Clock } from "lucide-react";
-import { supabase } from "../lib/supabaseClient";
+import { supabase, authHeaders } from "../lib/supabaseClient";
 import { logAuditEvent } from "../lib/auditLog";
 import BolForm from "./BolForm";
 
@@ -434,6 +434,10 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
+  const [drivers, setDrivers] = useState([]);
+  const [assignedDriverId, setAssignedDriverId] = useState(bol.assigned_driver_id || "");
+  const [assigningDriver, setAssigningDriver] = useState(false);
+
   const [auditLog, setAuditLog] = useState([]);
   const [auditNames, setAuditNames] = useState({});
   const [companyName, setCompanyName] = useState("");
@@ -493,11 +497,37 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
         metadata: { bol_number: bol.bol_number },
       });
     }
+    async function loadDrivers() {
+      if (role !== "trucker") return;
+      const headers = await authHeaders();
+      const res = await fetch("/api/drivers", { headers });
+      if (!res.ok) return;
+      const json = await res.json();
+      setDrivers(json.drivers || []);
+    }
     loadItems();
     loadAudit();
     loadMyCompany();
+    loadDrivers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bol.id]);
+
+  async function assignDriver(newDriverId) {
+    setAssigningDriver(true);
+    setError("");
+    const { error: assignError } = await supabase
+      .from("bols")
+      .update({ assigned_driver_id: newDriverId || null })
+      .eq("id", bol.id);
+    setAssigningDriver(false);
+    if (assignError) {
+      setError(assignError.message);
+      return;
+    }
+    setAssignedDriverId(newDriverId);
+    onUpdated();
+  }
+
   async function updateBol(fields, messageText, auditAction, auditDetails, notifTitle, notifMessage) {
     setError("");
     setSaving(true);
@@ -757,6 +787,32 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
           <div className={`font-mono uppercase tracking-wide font-semibold text-sm ${STATUS_COLORS[bol.status] || "text-gray-400"}`}>
             Status: {STATUS_LABELS[bol.status] || bol.status}
           </div>
+
+          {isTrucker && bol.status !== "draft" && bol.status !== "sent" && bol.status !== "correction_requested" && (
+            <div className="bg-gray-50 border border-gray-200 rounded-sm px-3 py-2.5">
+              <label className="block text-[10px] uppercase tracking-widest text-gray-400 font-mono mb-1.5">
+                Assigned Driver
+              </label>
+              <select
+                value={assignedDriverId}
+                onChange={(e) => assignDriver(e.target.value)}
+                disabled={assigningDriver}
+                className="w-full sm:w-64 border border-gray-300 rounded-sm px-3 py-2 text-sm bg-white disabled:opacity-50"
+              >
+                <option value="">Not assigned — you'll update status yourself</option>
+                {drivers.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.driver_full_name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-1.5">
+                Assigning a driver lets them confirm pickup, mark in transit/delivered, and upload the
+                signed BOL themselves from their own login — without seeing this conversation, the rate,
+                or who you're working with.
+              </p>
+            </div>
+          )}
 
           <ViewSection title="Shipment">
             <ViewRow label="BOL Number" value={bol.bol_number} />
@@ -1036,69 +1092,4 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
                   <button
                     onClick={() => cameraInputRef.current?.click()}
                     disabled={uploading}
-                    className="flex-1 flex items-center justify-center gap-1.5 bg-asphalt text-white py-2.5 rounded-sm font-mono text-xs uppercase tracking-wide hover:bg-black disabled:opacity-50"
-                  >
-                    <Camera size={14} /> {uploading ? "Uploading..." : "Take Photo"}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {auditLog.length > 0 && (
-            <div className="border-t-2 border-gray-300 pt-4">
-              <h3 className="text-sm font-bold uppercase tracking-wide text-asphalt mb-3 flex items-center gap-1.5">
-                <Clock size={14} /> History
-              </h3>
-              <div className="space-y-2">
-                {auditLog.map((entry) => (
-                  <div key={entry.id} className="text-xs text-steelgray border-l-2 border-gray-200 pl-2.5">
-                    <div className="font-semibold text-asphalt">
-                      {ACTION_LABELS[entry.action] || entry.action}
-                    </div>
-                    <div className="text-gray-400">
-                      {auditNames[entry.user_id] || "Unknown"} — {new Date(entry.created_at).toLocaleString()}
-                    </div>
-                    {entry.details && <div className="text-gray-500 mt-0.5">{entry.details}</div>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ViewSection({ title, children }) {
-  return (
-    <section>
-      <h3 className="text-xs font-bold uppercase tracking-wide text-steelgray border-b border-gray-200 pb-1.5 mb-2">{title}</h3>
-      <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1.5">{children}</div>
-    </section>
-  );
-}
-
-function ViewRow({ label, value, full }) {
-  if (!value) return null;
-  return (
-    <div className={full ? "sm:col-span-2" : ""}>
-      <span className="text-xs text-gray-400">{label}:</span>{" "}
-      <span className="text-sm text-asphalt">{value}</span>
-    </div>
-  );
-}
-
-function ActField({ label, value, onChange }) {
-  return (
-    <div>
-      <label className="block text-xs uppercase tracking-wide text-steelgray mb-1">{label}</label>
-      <input
-        value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-gray-300 rounded-sm px-3 py-2 text-sm"
-      />
-    </div>
-  );
-}
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-asphalt text-white py-2.5
