@@ -1092,4 +1092,69 @@ function BolViewer({ bol, user, role, match, onClose, onUpdated }) {
                   <button
                     onClick={() => cameraInputRef.current?.click()}
                     disabled={uploading}
-                    className="flex-1 flex items-center justify-center gap-1.5 bg-asphalt text-white py-2.5
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-asphalt text-white py-2.5 rounded-sm font-mono text-xs uppercase tracking-wide hover:bg-black disabled:opacity-50"
+                  >
+                    <Camera size={14} /> {uploading ? "Uploading..." : "Take Photo"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {auditLog.length > 0 && (
+            <div className="border-t-2 border-gray-300 pt-4">
+              <h3 className="text-sm font-bold uppercase tracking-wide text-asphalt mb-3 flex items-center gap-1.5">
+                <Clock size={14} /> History
+              </h3>
+              <div className="space-y-2">
+                {auditLog.map((entry) => (
+                  <div key={entry.id} className="text-xs text-steelgray border-l-2 border-gray-200 pl-2.5">
+                    <div className="font-semibold text-asphalt">
+                      {ACTION_LABELS[entry.action] || entry.action}
+                    </div>
+                    <div className="text-gray-400">
+                      {auditNames[entry.user_id] || "Unknown"} — {new Date(entry.created_at).toLocaleString()}
+                    </div>
+                    {entry.details && <div className="text-gray-500 mt-0.5">{entry.details}</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ViewSection({ title, children }) {
+  return (
+    <section>
+      <h3 className="text-xs font-bold uppercase tracking-wide text-steelgray border-b border-gray-200 pb-1.5 mb-2">{title}</h3>
+      <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1.5">{children}</div>
+    </section>
+  );
+}
+
+function ViewRow({ label, value, full }) {
+  if (!value) return null;
+  return (
+    <div className={full ? "sm:col-span-2" : ""}>
+      <span className="text-xs text-gray-400">{label}:</span>{" "}
+      <span className="text-sm text-asphalt">{value}</span>
+    </div>
+  );
+}
+
+function ActField({ label, value, onChange }) {
+  return (
+    <div>
+      <label className="block text-xs uppercase tracking-wide text-steelgray mb-1">{label}</label>
+      <input
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full border border-gray-300 rounded-sm px-3 py-2 text-sm"
+      />
+    </div>
+  );
+}
