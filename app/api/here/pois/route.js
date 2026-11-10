@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAuthedUser } from "../../../../lib/apiAuth";
 
 const CATEGORIES = {
   truckStop: "700-7900-0132",
@@ -8,6 +9,14 @@ const CATEGORIES = {
 };
 
 export async function POST(req) {
+  // HERE calls are billed per request — require a logged-in user so a
+  // stranger who finds this URL can't run up the API bill (matches
+  // autocomplete/reverse, which already had this check).
+  const user = await getAuthedUser(req);
+  if (!user) {
+    return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+  }
+
   const apiKey = process.env.HERE_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "HERE API key not configured" }, { status: 500 });
