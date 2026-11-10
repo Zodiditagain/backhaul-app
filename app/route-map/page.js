@@ -720,12 +720,11 @@ function RouteMapInner() {
     const points = sampleRoutePoints();
     if (points.length === 0) return;
     try {
-      const res = await fetch("/api/here/pois", {
+           const res = await fetch("/api/here/pois", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...(await authHeaders()), "Content-Type": "application/json" },
         body: JSON.stringify({ points, types: enabled }),
-      });
-      const data = await res.json();
+      });      const data = await res.json();
       const items = data.items || [];
       items.forEach((poi) => {
     const icon = new H.map.Icon(poiIconSvg(poi.type), {
