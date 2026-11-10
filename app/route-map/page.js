@@ -162,7 +162,7 @@ function RouteMapInner() {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [navError, setNavError] = useState("");
   const [isRerouting, setIsRerouting] = useState(false);
-  const [poiTypes, setPoiTypes] = useState({ truckStop: false, weighStation: false, fuel: false });
+  const [poiTypes, setPoiTypes] = useState({ truckStop: false, weighStation: false, fuel: false, restArea: false });
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const platformRef = useRef(null);
@@ -1578,6 +1578,16 @@ function RouteMapInner() {
               }`}
             >
               Fuel
+            </button>
+            <button
+              onClick={() => setPoiTypes((p) => ({ ...p, restArea: !p.restArea }))}
+              className={`text-xs font-semibold uppercase tracking-wide px-3 py-1.5 rounded-md border ${
+                poiTypes.restArea
+                  ? "bg-purple-600 border-purple-600 text-white"
+                  : "bg-slate-900 border-slate-800 text-gray-400 hover:text-white"
+              }`}
+            >
+              Rest Areas
             </button>
           </div>
         )}
